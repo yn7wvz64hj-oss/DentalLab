@@ -12,6 +12,9 @@ if key == root or root in key.parents:
 output = args.output.resolve(); output.mkdir(parents=True, exist_ok=True)
 app = root / 'DentalLab.app'
 info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+public_key = subprocess.check_output(['xcrun', 'swift', str(root / 'Tools/update-public-key.swift'), str(key)], text=True).strip()
+if public_key != info.get('SUPublicEDKey'):
+    parser.error('The signing key does not match the public key embedded in the app')
 version = info['CFBundleShortVersionString']
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
 archive = output / ('DentalLab-' + version + '-mac.zip')
