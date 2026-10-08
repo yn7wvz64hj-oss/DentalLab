@@ -1,0 +1,9 @@
+.build/
+DentalLab.app/
+*.dlvault
+*.dlbackup
+*.key
+*private-key*
+.DS_Store
+Vendor/Sparkle.framework/
+Vendor/bin/
