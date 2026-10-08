@@ -1,4 +1,4 @@
-# DentalLab 0.5 per Mac
+# DentalLab 0.6 per Mac
 
 Versione di sviluppo con interfaccia rinnovata, archivio locale cifrato e moduli per un laboratorio italiano di dispositivi odontotecnici su misura in regime ordinario.
 
@@ -19,7 +19,7 @@ L’app inizia vuota. Nessun dato dimostrativo viene caricato nell’archivio re
 ## Moduli disponibili
 
 - **Panoramica e scadenze**: produzione, consegne, saldi, scorte e scadenze delle schede qualità/sorveglianza.
-- **Clienti e pazienti**: anagrafiche con dati strutturati; codici paziente senza imporre il nome completo.
+- **Clienti e lavori**: anagrafiche clienti e dati paziente all’interno della scheda lavoro.
 - **Lavori**: stato, prescrizione, tipo dispositivo, classe valutata dal fabbricante, denti/colore, fascicolo e allegati.
 - **Listino e preventivi**: righe, quantità, prezzi, sconti, IVA e natura fiscale; totali con decimali.
 - **Consegne**: destinatario, indirizzo, data trasporto, causale, vettore e colli; righe senza prezzi nel PDF.
@@ -113,3 +113,22 @@ In Impostazioni → Password giornaliera puoi cambiarla inserendo la password at
 Il ripristino mantiene la password attuale di questo archivio; un backup trasferito in un nuovo archivio richiede una nuova configurazione. La password di accesso non va considerata un controllo contro chi può modificare i file dell’app o accedere allo stesso account macOS.
 
 Nel modulo Lavori, le schede sono raggruppate per anno della data di consegna, nel fuso Europe/Rome. Il filtro “Anno di consegna” permette di vedere un anno specifico oppure tutti gli anni. Funziona anche con gli archiviati e insieme alla ricerca. Modificando la consegna di un lavoro cambia il suo gruppo annuale. La Panoramica e le Scadenze restano trasversali agli anni.
+
+## Mappa dentale — versione 0.6
+
+La voce Pazienti è rimossa dal menu. Il codice paziente continua a essere registrato dentro ogni lavoro. Le schede paziente salvate nelle versioni precedenti restano nell’archivio e sono consultabili in Impostazioni → Schede paziente delle versioni precedenti, senza creare lavori fittizi.
+
+Apri un lavoro e scegli la scheda **Mappa dentale**. La vista mostra denti permanenti (32) o decidui (20), con numerazione a due cifre e destra/sinistra riferite al paziente.
+
+- Clic seleziona un elemento.
+- Ctrl+clic oppure Cmd+clic aggiunge o toglie elementi alla selezione.
+- Maiuscolo+clic seleziona l’intervallo nella stessa arcata, includendo il passaggio fra i due quadranti anteriori.
+- Scegli lavorazione, scala e codice colore; premi Applica ai denti selezionati. I denti non selezionati mantengono le proprie assegnazioni. Il pulsante sostituisce le assegnazioni precedenti sui denti selezionati.
+- Per estendere una lavorazione già registrata, clicca il dente compilato: i campi si riempiono con i suoi dati. Aggiungi gli altri con Ctrl o Maiuscolo e premi Applica.
+- Salva bozza registra la mappa nell’archivio. Chiudi senza salvare mantiene il lavoro precedente. Le schede registrate/archiviate sono consultabili ma non modificabili.
+
+Ogni dente ha una lavorazione e un codice colore nel singolo lavoro; per i ponti distingui pilastri ed elementi intermedi. La scelta Altro consente di descrivere lavorazioni diverse. VITA classical include A1, A2, A3, A3.5, A4, B1–B4, C1–C4 e D2–D4. VITA 3D-MASTER e Altra scala hanno un codice a testo libero. La grafica è schematica e i colori della selezione indicano lo stato, non la tonalità odontotecnica: non è una scala cromatica calibrata.
+
+I PDF di lavori e dichiarazioni includono il riepilogo per dente. Nei documenti, gli elementi e i colori vengono ricavati dalla mappa se presente, anche quando sono state rimosse tutte le assegnazioni. I vecchi campi a testo sono mantenuti per compatibilità e usati quando manca una mappa strutturata; non vengono interpretati o convertiti automaticamente.
+
+Riferimento dei codici VITA classical: https://www.vita-zahnfabrik.com/en-US/VITA-classical-A1-D4-shade-guide-39725%2C27568.html . VITA è un marchio del rispettivo titolare; l’app non è affiliata al produttore.

@@ -5,6 +5,7 @@ import PDFKit
 
 struct SelfTests {
     static func run() throws {
+        try DentalChartChecks.run()
         var deadlineWork = Entry(section: "Lavori"); deadlineWork.name = "Nome clinico da non inviare"; deadlineWork.patient = "Paziente riservato"
         deadlineWork.date = ISO8601DateFormatter().date(from: "2026-03-29T12:00:00Z")!
         let planned = Deadline.make([deadlineWork, Entry(section: "Clienti")])
@@ -92,6 +93,7 @@ struct PreviewRenderer {
         var profile = Profile(); profile.name = "Studio Forma"; profile.regime = "RF01"; store.db.profile = profile
         for (i, title) in ["Corona in zirconia", "Bite notturno", "Protesi mobile", "Ponte su tre elementi", "Riparazione protesi"].enumerated() { var e = store.create("Lavori"); e.name = title; e.client = ["Studio Rossi", "Studio Bianchi", "Studio Verdi"][i % 3]; e.status = workStates[i % 4]; e.date = Calendar.current.date(byAdding: .day, value: i - 1, to: Date())!; store.db.entries.append(e) }
         var invoice = Entry(section: "Fatture"); invoice.name = "Fattura di esempio"; invoice.price = 1280; store.db.entries.append(invoice)
+        if ProcessInfo.processInfo.environment["DENTALLAB_PREVIEW_TAB"] == "Mappa dentale" { store.db.entries[0].device?.toothWorks = [ToothWork(tooth: 11, kind: "Corona in zirconia", shadeSystem: "VITA classical A1–D4", shade: "A2"), ToothWork(tooth: 21, kind: "Corona in zirconia", shadeSystem: "VITA classical A1–D4", shade: "A2"), ToothWork(tooth: 16, kind: "Intarsio", shadeSystem: "VITA classical A1–D4", shade: "A3")] }
         let module = ProcessInfo.processInfo.environment["DENTALLAB_PREVIEW_MODULE"] ?? "Panoramica"
         if module == "Accesso" { store.refreshDailyLock() }
         if module == "Lavori" { var old = store.entries[0]; old.id = UUID(); old.name = "Lavoro dell’anno precedente"; old.date = Calendar.current.date(byAdding: .year, value: -1, to: Date())!; store.db.entries.append(old) }

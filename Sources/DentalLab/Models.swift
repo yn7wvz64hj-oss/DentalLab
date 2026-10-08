@@ -6,7 +6,7 @@ func numeric(_ value: Decimal) -> String { NSDecimalNumber(decimal: value).strin
 func day(_ date: Date) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "it_IT"); f.dateStyle = .medium; return f.string(from: date) }
 func isoDay(_ date: Date) -> String { let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Europe/Rome"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date) }
 let workStates = ["Da iniziare", "In lavorazione", "In prova", "Pronto", "Consegnato"]
-let sections = ["Panoramica", "Lavori", "Scadenze", "Clienti", "Pazienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza", "Attività", "Impostazioni"]
+let sections = ["Panoramica", "Lavori", "Scadenze", "Clienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza", "Attività", "Impostazioni"]
 let documentSections = ["Preventivi", "Consegne", "Fatture", "Conformità"]
 struct Contact: Codable, Equatable {
     var vat = ""; var taxCode = ""; var address = ""; var zip = ""; var city = ""; var province = ""; var email = ""; var phone = ""; var recipient = "0000000"; var pec = ""
@@ -22,6 +22,9 @@ struct Line: Codable, Identifiable, Equatable {
 struct Payment: Codable, Identifiable, Equatable { var id = UUID(); var date = Date(); var amount: Decimal = 0; var method = "Bonifico"; var reference = "" }
 struct MaterialUse: Codable, Identifiable, Equatable { var id = UUID(); var stockID: UUID; var quantity: Decimal = 1 }
 struct Device: Codable, Equatable {
+    var toothWorks: [ToothWork]?
+    var dentalElements: String { guard let works = toothWorks else { return teeth }; return works.map { $0.tooth }.sorted().map(String.init).joined(separator: ", ") }
+    var dentalShades: String { guard let works = toothWorks else { return shade }; return Array(Set(works.map { $0.shadeSystem + " " + $0.shade })).sorted().joined(separator: "; ") }
     var identifier = ""; var type = "Protesi fissa"; var riskClass = "Da valutare"; var implantable = false; var prescriber = ""; var institution = ""; var prescription = ""; var prescriptionDate = Date(); var teeth = ""; var shade = ""; var intendedUse = ""; var design = ""; var manufacturing = ""; var performance = ""; var risks = ""; var requirements = ""; var exceptions = ""; var substances = "Da valutare"; var instructions = ""; var checks = ""; var reviewer = ""; var conformityConfirmed = false; var releaseDate = Date()
 }
 struct Delivery: Codable, Equatable { var recipient = ""; var address = ""; var carrier = ""; var reason = "Consegna dispositivo su misura"; var packages = 1; var transportDate = Date() }
@@ -59,6 +62,13 @@ struct Validation {
         try require(!e.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Inserisci un titolo o riferimento.")
         try require(e.price.isFinite && e.price >= 0 && e.quantity.isFinite && e.quantity >= 0, "Importi e quantità devono essere validi e non negativi.")
         for l in e.items { try require(!l.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !l.quantity.isNaN && l.quantity > 0 && !l.unitPrice.isNaN && l.unitPrice >= 0 && l.discount >= 0 && l.discount <= 100 && l.vat >= 0 && l.vat <= 100, "Controlla descrizione, quantità, prezzo, sconto e IVA delle righe.") }
+        if let works = e.device?.toothWorks {
+            try require(Set(works.map { $0.tooth }).count == works.count, "Un dente compare più volte nella mappa.")
+            for work in works {
+                try require(DentalSelection.valid.contains(work.tooth) && !work.kind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !work.shade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Controlla numero del dente, lavorazione e colore.")
+                if work.shadeSystem == "VITA classical A1–D4" { try require(DentalSelection.shades.contains(work.shade), "Codice VITA classical non valido.") }
+            }
+        }
         for p in e.payments ?? [] { try require(!p.amount.isNaN && p.amount > 0, "Ogni pagamento deve avere un importo positivo.") }
         try require((e.stamp ?? 0) >= 0 && !(e.stamp ?? 0).isNaN, "Il bollo non può essere negativo.")
         try require(e.received <= e.total, "Gli incassi superano il totale del documento.")

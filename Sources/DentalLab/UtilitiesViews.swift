@@ -12,6 +12,9 @@ struct SettingsView: View {
     var counterKey: String { "\(series)-\(seriesYear)" }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            if store.entries.contains(where: { $0.section == "Pazienti" }) {
+                Surface { DisclosureGroup("Schede paziente delle versioni precedenti") { ForEach(store.entries.filter { $0.section == "Pazienti" }) { patient in VStack(alignment: .leading) { Text(patient.name).fontWeight(.semibold); Text(patient.detail).font(.caption).foregroundColor(.secondary) }.padding(.vertical, 6) } } }
+            }
             PasswordPanel(store: store)
             UpdatesPanel()
             CalendarPanel(store: store)

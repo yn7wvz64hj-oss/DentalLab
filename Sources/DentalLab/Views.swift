@@ -85,7 +85,7 @@ struct ContentView: View {
             HStack(spacing: 10) { BrandMark().frame(width: 32, height: 38); VStack(alignment: .leading, spacing: 2) { Text("DentalLab").font(.system(size: 21, weight: .semibold)); Text("LABORATORIO DIGITALE").font(.system(size: 8, weight: .medium)).tracking(1.8).opacity(0.5) } }.padding(.horizontal, 22).padding(.top, 38).padding(.bottom, 30)
             ScrollView { VStack(alignment: .leading, spacing: 4) {
                 navGroup("IL TUO SPAZIO", ["Panoramica", "Lavori", "Scadenze"])
-                navGroup("RELAZIONI", ["Clienti", "Pazienti", "Listino"])
+                navGroup("RELAZIONI", ["Clienti", "Listino"])
                 navGroup("AMMINISTRAZIONE", ["Preventivi", "Consegne", "Fatture", "Magazzino"])
                 navGroup("DOCUMENTAZIONE", ["Conformità", "Qualità", "Sorveglianza"])
                 navGroup("ARCHIVIO", ["Attività", "Impostazioni"])

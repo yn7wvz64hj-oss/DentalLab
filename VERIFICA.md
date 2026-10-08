@@ -1,4 +1,4 @@
-# Verifica della versione 0.5
+# Verifica della versione 0.6
 
 Compilazione nativa Swift 5.8.1 su macOS Intel: riuscita.
 
@@ -39,3 +39,7 @@ La sostituzione e il riavvio di un’app installata con una versione successiva 
 ### Password giornaliera e anni
 
 Test con archivio e chiave temporanei: primo accesso bloccato senza password, configurazione, riapertura nella stessa giornata, nuova giornata bloccata, blocco manuale, rifiuto di password errata, divieto di salvare schede mentre bloccato, cambio password e rifiuto della precedente, persistenza cifrata del verificatore e salt casuale. Suddivisione lavori in anni, inclusione degli archiviati e passaggio d’anno nel fuso italiano. Nessun dato personale reale usato nei test.
+
+### Mappa dentale
+
+Test della selezione singola, aggiunta/rimozione Ctrl, intervallo Maiuscolo nella stessa arcata e attraverso la linea mediana, esclusione di intervalli tra arcate diverse; applicazione multipla e sostituzione senza modificare elementi non selezionati; 52 identificativi distinti tra permanenti e decidui, codici VITA classical, salvataggio/lettura Codable e migrazione dai dispositivi senza mappa. Riepilogo per PDF verificato. Verificata la consegna dei modificatori Ctrl/Maiuscolo dai callback NSView.mouseDown/rightMouseDown mediante eventi sintetici. Verificati inoltre i blocchi del PDF, il rifiuto di elementi duplicati e la rimozione completa senza riutilizzare dati dentali precedenti. Accessibilità e tastiera prevedono Spazio/Invio. Il clic fisico con modificatori non è stato provato nel Finder su un archivio reale.

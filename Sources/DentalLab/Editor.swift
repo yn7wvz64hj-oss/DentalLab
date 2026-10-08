@@ -24,13 +24,14 @@ struct Editor: View {
     var device: Binding<Device> { Binding(get: { entry.device ?? Device() }, set: { entry.device = $0 }) }
     var quality: Binding<Quality> { Binding(get: { entry.quality ?? Quality() }, set: { entry.quality = $0 }) }
     var lines: Binding<[Line]> { Binding(get: { entry.lines ?? [] }, set: { entry.lines = $0 }) }
-    var tabs: [String] { var list = ["Scheda"]; if entry.section == "Lavori" || entry.section == "Conformità" { list += ["Dispositivo", "Fascicolo"] }; if ["Lavori", "Listino", "Preventivi", "Fatture", "Consegne"].contains(entry.section) { list.append("Righe") }; list.append("Allegati"); if entry.section == "Fatture" { list.append("Incassi") }; return list }
+    var tabs: [String] { var list = ["Scheda"]; if entry.section == "Lavori" || entry.section == "Conformità" { list += ["Mappa dentale", "Dispositivo", "Fascicolo"] }; if ["Lavori", "Listino", "Preventivi", "Fatture", "Consegne"].contains(entry.section) { list.append("Righe") }; list.append("Allegati"); if entry.section == "Fatture" { list.append("Incassi") }; return list }
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) { Image(systemName: moduleIcon(entry.section)).font(.system(size: 22)).foregroundColor(Palette.teal).padding(14).background(Palette.teal.opacity(0.08)).cornerRadius(12); VStack(alignment: .leading, spacing: 6) { Text(entry.name.isEmpty ? "Nuova scheda" : entry.name).font(.system(size: 23, weight: .semibold)); Text("\(entry.section) · \(entry.issued?.number ?? "In preparazione")").font(.system(size: 11)).foregroundColor(.secondary) }; Spacer(); Badge(text: entry.issued != nil ? "Registrato · sola lettura" : entry.isArchived ? "Archiviato" : "Bozza", color: readOnly ? Palette.teal : .gray) }.padding(24).background(Color.white)
             HStack(spacing: 22) { ForEach(tabs, id: \.self) { item in Button { tab = item } label: { VStack(spacing: 10) { Text(item).font(.system(size: 12, weight: tab == item ? .semibold : .regular)).foregroundColor(tab == item ? Palette.teal : .secondary); Rectangle().fill(tab == item ? Palette.teal : .clear).frame(height: 2) } }.buttonStyle(.plain) }; Spacer() }.padding(.horizontal, 26).padding(.top, 14).background(Color.white)
             ScrollView { VStack(alignment: .leading, spacing: 18) {
                 if tab == "Scheda" { general.disabled(readOnly) }
+                if tab == "Mappa dentale" { DentalChart(works: Binding(get: { entry.device?.toothWorks ?? [] }, set: { entry.device?.toothWorks = $0 }), readOnly: readOnly) }
                 if tab == "Dispositivo" { clinical.disabled(readOnly) }
                 if tab == "Fascicolo" { dossier.disabled(readOnly) }
                 if tab == "Righe" { LinesEditor(lines: lines, listino: store.entries.filter { $0.section == "Listino" && !$0.isArchived }, readOnly: readOnly); totals }
@@ -113,7 +114,8 @@ struct Editor: View {
                 HStack { Field(title: "Identificativo dispositivo", text: device.identifier); Picker("Tipologia", selection: device.type) { ForEach(["Protesi fissa", "Protesi mobile", "Ortodonzia", "Bite", "Riparazione", "Altro"], id: \.self) { Text($0).tag($0) } } }
                 HStack { Picker("Classe di rischio", selection: device.riskClass) { ForEach(["Da valutare", "I", "IIa", "IIb", "III"], id: \.self) { Text($0).tag($0) } }; Toggle("Dispositivo impiantabile", isOn: device.implantable) }
                 Text("La classe e l’eventuale impiantabilità devono essere valutate dal fabbricante.").font(.caption).foregroundColor(.secondary)
-                HStack { Field(title: "Elementi dentali / arcata", text: device.teeth); Field(title: "Colore / scala", text: device.shade) }
+                if entry.device?.toothWorks != nil { Text("Elementi dalla mappa: " + (entry.device?.dentalElements ?? "")).font(.caption); Text("Colori dalla mappa: " + (entry.device?.dentalShades ?? "")).font(.caption).foregroundColor(.secondary) }
+                else { HStack { Field(title: "Elementi dentali / arcata (testo precedente)", text: device.teeth); Field(title: "Colore / scala (testo precedente)", text: device.shade) } }
                 Field(title: "Destinazione d’uso", text: device.intendedUse)
             } }
             Surface { VStack(alignment: .leading, spacing: 18) {
