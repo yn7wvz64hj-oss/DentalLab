@@ -129,6 +129,6 @@ Apri un lavoro e scegli la scheda **Mappa dentale**. La vista mostra denti perma
 
 Ogni dente ha una lavorazione e un codice colore nel singolo lavoro; per i ponti distingui pilastri ed elementi intermedi. La scelta Altro consente di descrivere lavorazioni diverse. VITA classical include A1, A2, A3, A3.5, A4, B1–B4, C1–C4 e D2–D4. VITA 3D-MASTER e Altra scala hanno un codice a testo libero. La grafica è schematica e i colori della selezione indicano lo stato, non la tonalità odontotecnica: non è una scala cromatica calibrata.
 
-I PDF di lavori e dichiarazioni includono il riepilogo per dente. Nei documenti, gli elementi e i colori vengono ricavati dalla mappa se presente, anche quando sono state rimosse tutte le assegnazioni. I vecchi campi a testo sono mantenuti per compatibilità e usati quando manca una mappa strutturata; non vengono interpretati o convertiti automaticamente.
+I PDF dei lavori includono il riepilogo per dente; le dichiarazioni riportano gli elenchi di elementi e colori ricavati dalla mappa. Nei documenti, gli elementi e i colori vengono ricavati dalla mappa se presente, anche quando sono state rimosse tutte le assegnazioni. I vecchi campi a testo sono mantenuti per compatibilità e usati quando manca una mappa strutturata; non vengono interpretati o convertiti automaticamente.
 
 Riferimento dei codici VITA classical: https://www.vita-zahnfabrik.com/en-US/VITA-classical-A1-D4-shade-guide-39725%2C27568.html . VITA è un marchio del rispettivo titolare; l’app non è affiliata al produttore.
