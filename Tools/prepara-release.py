@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build a signed Sparkle archive and appcast. The private key is never packaged."""
-import argparse, pathlib, plistlib, subprocess, xml.etree.ElementTree as ET
+import argparse, pathlib, plistlib, subprocess, tempfile, xml.etree.ElementTree as ET
 parser = argparse.ArgumentParser()
 parser.add_argument('--key', required=True, type=pathlib.Path, help='Private Ed25519 signing key file, outside the project')
 parser.add_argument('--output', required=True, type=pathlib.Path)
@@ -12,7 +12,8 @@ if key == root or root in key.parents:
 output = args.output.resolve(); output.mkdir(parents=True, exist_ok=True)
 app = root / 'DentalLab.app'
 info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
-public_key = subprocess.check_output(['xcrun', 'swift', str(root / 'Tools/update-public-key.swift'), str(key)], text=True).strip()
+with tempfile.TemporaryDirectory(prefix='DentalLab-release-') as cache:
+    public_key = subprocess.check_output(['xcrun', 'swift', '-module-cache-path', cache, str(root / 'Tools/update-public-key.swift'), str(key)], text=True).strip()
 if public_key != info.get('SUPublicEDKey'):
     parser.error('The signing key does not match the public key embedded in the app')
 version = info['CFBundleShortVersionString']
