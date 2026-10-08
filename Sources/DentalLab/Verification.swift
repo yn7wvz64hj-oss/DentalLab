@@ -20,6 +20,7 @@ struct SelfTests {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("DentalLab-tests-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }
         let key = SymmetricKey(size: .bits256)
+        try AccessChecks.run(folder: folder.appendingPathComponent("access"), key: key)
         let store = Store(folder: folder, testKey: key)
         try require(store.ready, store.error)
         var line = Line(); line.title = "Lavorazione di prova"; line.unitPrice = Decimal(string: "12.345")!; line.quantity = 3; line.discount = 10; line.vat = 22
@@ -92,6 +93,8 @@ struct PreviewRenderer {
         for (i, title) in ["Corona in zirconia", "Bite notturno", "Protesi mobile", "Ponte su tre elementi", "Riparazione protesi"].enumerated() { var e = store.create("Lavori"); e.name = title; e.client = ["Studio Rossi", "Studio Bianchi", "Studio Verdi"][i % 3]; e.status = workStates[i % 4]; e.date = Calendar.current.date(byAdding: .day, value: i - 1, to: Date())!; store.db.entries.append(e) }
         var invoice = Entry(section: "Fatture"); invoice.name = "Fattura di esempio"; invoice.price = 1280; store.db.entries.append(invoice)
         let module = ProcessInfo.processInfo.environment["DENTALLAB_PREVIEW_MODULE"] ?? "Panoramica"
+        if module == "Accesso" { store.refreshDailyLock() }
+        if module == "Lavori" { var old = store.entries[0]; old.id = UUID(); old.name = "Lavoro dell’anno precedente"; old.date = Calendar.current.date(byAdding: .year, value: -1, to: Date())!; store.db.entries.append(old) }
         let isEditor = module == "Editor"
         let width: CGFloat = isEditor ? 990 : 1440
         let height: CGFloat = isEditor ? 770 : 960

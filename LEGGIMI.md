@@ -1,4 +1,4 @@
-# DentalLab 0.4 per Mac
+# DentalLab 0.5 per Mac
 
 Versione di sviluppo con interfaccia rinnovata, archivio locale cifrato e moduli per un laboratorio italiano di dispositivi odontotecnici su misura in regime ordinario.
 
@@ -103,3 +103,13 @@ Il canale previsto è https://github.com/yn7wvz64hj-oss/DentalLab/releases . Div
 Il logo a dente è disponibile come Logo.png, Resources/Logo.svg e Resources/DentalLab.icns; la stessa forma è usata nella barra laterale.
 
 Sparkle: https://sparkle-project.org/documentation/ . Licenza inclusa in Vendor/SPARKLE-LICENSE.
+
+## Password giornaliera e lavori per anno — versione 0.5
+
+Al primo avvio della 0.5 imposta una password di almeno 10 caratteri e confermala. È richiesta al primo avvio di ogni giornata, secondo la data locale del Mac. Dopo un accesso riuscito, chiudere e riaprire DentalLab nello stesso giorno non richiede di reinserirla. Un’app lasciata aperta durante la notte non si blocca automaticamente a mezzanotte: il controllo giornaliero avviene al riavvio. Il lucchetto e il comando “Blocca archivio” bloccano subito l’interfaccia e richiedono la password.
+
+In Impostazioni → Password giornaliera puoi cambiarla inserendo la password attuale. Cinque tentativi errati impongono un’attesa di 30 secondi nella sessione corrente. La password non viene salvata in chiaro: nell’archivio cifrato sono memorizzati un salt casuale e un verificatore PBKDF2-SHA256. Questo è un blocco di accesso all’app; la cifratura dell’archivio resta affidata alla chiave nel Portachiavi del Mac. La password di accesso è distinta dalla password dei backup. Non è disponibile un recupero della password dall’interfaccia. Conserva la password e i backup completi in modo protetto.
+
+Il ripristino mantiene la password attuale di questo archivio; un backup trasferito in un nuovo archivio richiede una nuova configurazione. La password di accesso non va considerata un controllo contro chi può modificare i file dell’app o accedere allo stesso account macOS.
+
+Nel modulo Lavori, le schede sono raggruppate per anno della data di consegna, nel fuso Europe/Rome. Il filtro “Anno di consegna” permette di vedere un anno specifico oppure tutti gli anni. Funziona anche con gli archiviati e insieme alla ricerca. Modificando la consegna di un lavoro cambia il suo gruppo annuale. La Panoramica e le Scadenze restano trasversali agli anni.

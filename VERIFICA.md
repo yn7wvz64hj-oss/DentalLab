@@ -1,4 +1,4 @@
-# Verifica della versione 0.4
+# Verifica della versione 0.5
 
 Compilazione nativa Swift 5.8.1 su macOS Intel: riuscita.
 
@@ -35,3 +35,7 @@ Non è stato eseguito un collegamento al calendario personale né verificato l�
 Integrazione Sparkle 2.10.0 con controllo manuale e automatico opzionale; installazione silenziosa disabilitata. Configurati HTTPS, firma Ed25519 di feed e pacchetto, verifica prima dell’estrazione, nessuna scadenza della verifica del feed e nessuna profilazione di sistema. Lo script di release non include la chiave privata e verifica le firme dopo averle generate. Icona ICNS prodotta nelle risoluzioni standard e logo SVG/PNG controllato visivamente.
 
 La sostituzione e il riavvio di un’app installata con una versione successiva non sono verificati su un archivio reale. Il canale remoto richiede la pubblicazione di una release GitHub e la relativa verifica pubblica.
+
+### Password giornaliera e anni
+
+Test con archivio e chiave temporanei: primo accesso bloccato senza password, configurazione, riapertura nella stessa giornata, nuova giornata bloccata, blocco manuale, rifiuto di password errata, divieto di salvare schede mentre bloccato, cambio password e rifiuto della precedente, persistenza cifrata del verificatore e salt casuale. Suddivisione lavori in anni, inclusione degli archiviati e passaggio d’anno nel fuso italiano. Nessun dato personale reale usato nei test.

@@ -52,20 +52,24 @@ struct ContentView: View {
     @State var archiving: Entry?
     @State var backup = false
     @State var movement: Entry?
+    @State var workYear = 0
+    var workYears: [Int] { WorkYear.available(store.entries) }
     var active: [Entry] { store.entries.filter { !$0.isArchived } }
     var openWorks: [Entry] { active.filter { $0.section == "Lavori" && $0.status != "Consegnato" } }
     var rows: [Entry] {
         store.entries.filter { e in
             let correct = section == "Scadenze" ? (e.section == "Lavori" && e.status != "Consegnato") || (["Qualità", "Sorveglianza"].contains(e.section) && e.status != "Chiuso") : e.section == section
-            return correct && (filter == "Archiviati" ? e.isArchived : !e.isArchived) && (filter != "Bozze" || e.issued == nil) && (filter != "Registrati" || e.issued != nil) && (search.isEmpty || "\(e.name) \(e.client) \(e.patient) \(e.lot) \(e.issued?.number ?? "") \(e.device?.identifier ?? "")".localizedCaseInsensitiveContains(search))
+            return correct && (section != "Lavori" || workYear == 0 || WorkYear.of(e) == workYear) && (filter == "Archiviati" ? e.isArchived : !e.isArchived) && (filter != "Bozze" || e.issued == nil) && (filter != "Registrati" || e.issued != nil) && (search.isEmpty || "\(e.name) \(e.client) \(e.patient) \(e.lot) \(e.issued?.number ?? "") \(e.device?.identifier ?? "")".localizedCaseInsensitiveContains(search))
         }.sorted { section == "Scadenze" ? $0.date < $1.date : ($0.updated ?? $0.date) > ($1.updated ?? $1.date) }
     }
     var body: some View {
         ZStack {
-            HStack(spacing: 0) { sidebar; main }
+            if store.ready && !store.locked { HStack(spacing: 0) { sidebar; main } }
             if store.locked || !store.ready {
                 Palette.canvas.ignoresSafeArea()
-                VStack(spacing: 20) { Image(systemName: "lock.shield").font(.system(size: 44)).foregroundColor(Palette.teal); Text(store.locked ? "Archivio bloccato" : "Archivio non disponibile").font(.title.bold()); Text(store.locked ? "Autenticati con il tuo Mac per continuare." : "\(store.error)").multilineTextAlignment(.center).frame(maxWidth: 520); if store.locked { Button("Sblocca", action: store.unlock).buttonStyle(LabButtonStyle(primary: true)) } else { Button("Ripristina backup…") { backup = true } } }
+                if store.ready { AccessScreen(store: store) }
+                else { VStack(spacing: 20) { Text("Archivio non disponibile").font(.title.bold()); Text(store.error).multilineTextAlignment(.center).frame(maxWidth: 520); Button("Ripristina backup…") { backup = true } } }
+
             }
         }
         .sheet(item: $editing) { e in Editor(entry: e).environmentObject(store) }
@@ -73,6 +77,7 @@ struct ContentView: View {
         .sheet(isPresented: $backup) { BackupView().environmentObject(store) }
         .alert("Archiviare questa scheda?", isPresented: Binding(get: { archiving != nil }, set: { if !$0 { archiving = nil } })) { Button("Annulla", role: .cancel) { archiving = nil }; Button("Archivia") { if let e = archiving { store.archive(e) }; archiving = nil } } message: { Text("La scheda rimane nell’archivio e nel backup. I documenti registrati mantengono numero e contenuto.") }
         .alert("Operazione non completata", isPresented: Binding(get: { !store.error.isEmpty && store.ready }, set: { if !$0 { store.error = "" } })) { Button("OK") { store.error = "" } } message: { Text(store.error) }
+        .onChange(of: store.locked) { locked in if locked { editing = nil; movement = nil; archiving = nil; backup = false; search = "" } }
         .onChange(of: section) { _ in search = ""; filter = "Attivi" }
     }
     var sidebar: some View {
@@ -136,12 +141,17 @@ struct ContentView: View {
     var records: some View {
         VStack(alignment: .leading, spacing: 18) {
             if section == "Fatture" || section == "Conformità" || section == "Sorveglianza" { Surface { HStack(alignment: .top, spacing: 12) { Image(systemName: "info.circle").foregroundColor(Palette.teal); Text(section == "Fatture" ? "Prepara XML e copia di cortesia. Invio SDI, verifica delle ricevute e conservazione fiscale si effettuano con il servizio fiscale esterno." : section == "Conformità" ? "Modello strutturato per l’Allegato XIII. La completezza dei campi non certifica la conformità del dispositivo; verifica e firma spettano al fabbricante." : "Registra l’esperienza post-produzione e le azioni. Gli incidenti e le segnalazioni alle autorità richiedono la procedura esterna di vigilanza.").font(.system(size: 11)).foregroundColor(.secondary) } } }
-            HStack { HStack { Image(systemName: "magnifyingglass").foregroundColor(.secondary); TextField("Cerca in \(section.lowercased())…", text: $search).textFieldStyle(.plain) }.padding(11).background(Color.white).cornerRadius(9).overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.line)).frame(maxWidth: 360); Spacer(); Picker("Visualizza", selection: $filter) { Text("Attivi").tag("Attivi"); if documentSections.contains(section) { Text("Bozze").tag("Bozze"); Text("Registrati").tag("Registrati") }; Text("Archiviati").tag("Archiviati") }.labelsHidden().frame(width: 160); Text("\(rows.count) schede").font(.system(size: 11)).foregroundColor(.secondary) }
+            HStack { HStack { Image(systemName: "magnifyingglass").foregroundColor(.secondary); TextField("Cerca in \(section.lowercased())…", text: $search).textFieldStyle(.plain) }.padding(11).background(Color.white).cornerRadius(9).overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.line)).frame(maxWidth: 360); Spacer(); if section == "Lavori" { Picker("Anno di consegna", selection: $workYear) { Text("Tutti gli anni").tag(0); ForEach(workYears, id: \.self) { year in Text(String(year)).tag(year) } }.frame(width: 220) }; Picker("Visualizza", selection: $filter) { Text("Attivi").tag("Attivi"); if documentSections.contains(section) { Text("Bozze").tag("Bozze"); Text("Registrati").tag("Registrati") }; Text("Archiviati").tag("Archiviati") }.labelsHidden().frame(width: 160); Text("\(rows.count) schede").font(.system(size: 11)).foregroundColor(.secondary) }
             Surface { VStack(alignment: .leading, spacing: 0) {
                 HStack { Text("RIFERIMENTO").frame(maxWidth: .infinity, alignment: .leading); Text(section == "Magazzino" ? "DISPONIBILITÀ" : "STATO").frame(width: 140, alignment: .leading); Text("DATA").frame(width: 105, alignment: .leading); Text("AZIONI").frame(width: 112, alignment: .trailing) }.font(.system(size: 9, weight: .semibold)).tracking(0.8).foregroundColor(.secondary).padding(.bottom, 14)
                 Divider()
                 if rows.isEmpty { empty("Il tuo archivio inizia qui", "Aggiungi una scheda oppure modifica i filtri di ricerca.", moduleIcon(section)).padding(.vertical, 35) }
-                ForEach(rows) { e in recordRow(e); Divider() }
+                if section == "Lavori" {
+                    ForEach(Array(Set(rows.map { WorkYear.of($0) })).sorted(by: >), id: \.self) { year in
+                        HStack { Text(String(year)).font(.system(size: 18, weight: .semibold)); Spacer(); Text("\(rows.filter { WorkYear.of($0) == year }.count) lavori").font(.caption).foregroundColor(.secondary) }.padding(.vertical, 16)
+                        ForEach(rows.filter { WorkYear.of($0) == year }) { e in recordRow(e); Divider() }
+                    }
+                } else { ForEach(rows) { e in recordRow(e); Divider() } }
             } }
         }
     }

@@ -12,6 +12,7 @@ struct SettingsView: View {
     var counterKey: String { "\(series)-\(seriesYear)" }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            PasswordPanel(store: store)
             UpdatesPanel()
             CalendarPanel(store: store)
             Surface { VStack(alignment: .leading, spacing: 18) { SectionHeading(title: "Identità del laboratorio"); Field(title: "Ragione sociale", text: $profile.name); ContactEditor(contact: $profile.contact); HStack { Field(title: "IBAN", text: $profile.iban); Text("Regime ordinario · RF01").font(.system(size: 12)).foregroundColor(Palette.teal) } } }

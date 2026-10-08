@@ -6,7 +6,7 @@ Gestionale locale per un laboratorio odontotecnico italiano. **Versione di svilu
 
 [Scarica l’app dalle release](https://github.com/yn7wvz64hj-oss/DentalLab/releases/latest).
 
-Richiede macOS 13 o successivo. Il pacchetto 0.4 è per Mac Intel; su Apple Silicon richiede Rosetta o ricompilazione. Archivio cifrato, moduli di laboratorio, consegne su Google Calendar tramite Calendario del Mac, aggiornamenti Sparkle firmati e logo a dente.
+Richiede macOS 13 o successivo. Il pacchetto 0.5 è per Mac Intel; su Apple Silicon richiede Rosetta o ricompilazione. Archivio cifrato, moduli di laboratorio, consegne su Google Calendar tramite Calendario del Mac, aggiornamenti Sparkle firmati e logo a dente, password al primo avvio della giornata e lavori suddivisi per anno di consegna.
 
 L’app è firmata ad hoc, non notarizzata. Leggi [LEGGIMI.md](LEGGIMI.md), [REQUISITI-E-LIMITI.md](REQUISITI-E-LIMITI.md) e [VERIFICA.md](VERIFICA.md) prima dell’uso.
 

@@ -50,7 +50,7 @@ struct Entry: Codable, Identifiable, Equatable {
     }
 }
 struct TaxGroup { var vat: Decimal; var nature: String; var reference: String; var net: Decimal; var tax: Decimal { roundMoney(net * vat / 100) } }
-struct Database: Codable { var calendarLink: CalendarLink?; var version = 2; var entries: [Entry] = []; var profile = Profile(); var movements: [StockMovement] = []; var audit: [Audit] = []; var counters: [String: Int] = [:] }
+struct Database: Codable { var dailyAccess: DailyAccess?; var calendarLink: CalendarLink?; var version = 2; var entries: [Entry] = []; var profile = Profile(); var movements: [StockMovement] = []; var audit: [Audit] = []; var counters: [String: Int] = [:] }
 struct PortableBackup: Codable { var version = 1; var database: Database; var files: [String: Data] }
 struct AppIssue: LocalizedError { var message: String; var errorDescription: String? { message } }
 func require(_ condition: Bool, _ message: String) throws { if !condition { throw AppIssue(message: message) } }

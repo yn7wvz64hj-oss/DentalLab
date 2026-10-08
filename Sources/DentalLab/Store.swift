@@ -11,6 +11,10 @@ final class Store: ObservableObject {
     @Published var notice = ""
     @Published var locked = false
     @Published var ready = false
+    @Published var needsPasswordSetup = false
+    private var failedAccess = 0
+    private var retryAfter = Date.distantPast
+    private let usesDailyGate: Bool
     lazy var calendarBridge = CalendarBridge()
     let folder: URL
     private var key: SymmetricKey?
@@ -19,6 +23,7 @@ final class Store: ObservableObject {
     var entries: [Entry] { db.entries }
     init(folder: URL = root, testKey: SymmetricKey? = nil) {
         self.folder = folder
+        usesDailyGate = testKey == nil
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             lockFD = Darwin.open(folder.appendingPathComponent(".lock").path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
@@ -44,6 +49,7 @@ final class Store: ObservableObject {
                 notice = "Archivio precedente importato. Le vecchie copie JSON e gli allegati in chiaro sono ancora presenti: verifica il backup prima di rimuoverle."
             } else { db.profile.regime = "RF01"; try persist(db, backup: false) }
             ready = true
+            if usesDailyGate { refreshDailyLock() }
         } catch { self.error = error.localizedDescription }
     }
     deinit { if lockFD >= 0 { flock(lockFD, LOCK_UN); Darwin.close(lockFD) } }
@@ -167,11 +173,45 @@ final class Store: ObservableObject {
         for (name, data) in payload.files { try require(UUID(uuidString: name) != nil, "Identificativo allegato non valido."); let id = UUID(); try saveBlob(data, id: id); mapping[name] = id }
         var next = payload.database
         next.calendarLink = nil
+        next.dailyAccess = db.dailyAccess
         for (series, value) in db.counters { next.counters[series] = max(next.counters[series] ?? 0, value) }
         for i in next.entries.indices { if var files = next.entries[i].files { for j in files.indices { guard let id = mapping[files[j].id.uuidString] else { throw AppIssue(message: "Allegato mancante.") }; files[j].id = id }; next.entries[i].files = files } }
-        next.audit.append(Audit(action: "Ripristino", recordID: nil, label: "Backup completo ripristinato")); try persist(next); ready = true; error = ""; notice = "Backup ripristinato."
+        next.audit.append(Audit(action: "Ripristino", recordID: nil, label: "Backup completo ripristinato")); try persist(next); ready = true; error = ""; notice = "Backup ripristinato."; if usesDailyGate { refreshDailyLock() }
     }
 
-    func lock() { let context = LAContext(); var err: NSError?; if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) { locked = true } else { error = "Autenticazione macOS non disponibile: usa il blocco schermo del Mac." } }
-    func unlock() { let context = LAContext(); context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Aprire l’archivio del laboratorio") { success, err in DispatchQueue.main.async { if success { self.locked = false } else { self.error = err?.localizedDescription ?? "Autenticazione non riuscita." } } } }
+    func refreshDailyLock(now: Date = Date()) {
+        needsPasswordSetup = db.dailyAccess == nil
+        locked = needsPasswordSetup || db.dailyAccess!.requiresPassword(at: now)
+    }
+    func setDailyPassword(_ password: String, now: Date = Date()) throws {
+        try require(ready && db.dailyAccess == nil, "La password è già configurata oppure l’archivio non è disponibile.")
+        var next = db; var access = try DailyAccess.make(password); access.lastDay = DailyAccess.today(now); next.dailyAccess = access
+        next.audit.append(Audit(action: "Password configurata", recordID: nil, label: "Protezione giornaliera attivata"))
+        try persist(next); needsPasswordSetup = false; locked = false; calendarBridge.queue(self)
+    }
+    func checkAccess(_ password: String, now: Date = Date()) throws {
+        try require(now >= retryAfter, "Troppi tentativi. Attendi 30 secondi prima di riprovare.")
+        guard let access = db.dailyAccess, try access.accepts(password) else {
+            failedAccess += 1; if failedAccess >= 5 { retryAfter = now.addingTimeInterval(30) }
+            throw AppIssue(message: "Password non corretta.")
+        }
+        failedAccess = 0; retryAfter = .distantPast
+    }
+    func unlockWithPassword(_ password: String, now: Date = Date()) throws {
+        try require(ready, "Archivio non disponibile."); try checkAccess(password, now: now)
+        var next = db; next.dailyAccess?.lastDay = DailyAccess.today(now)
+        next.audit.append(Audit(action: "Accesso", recordID: nil, label: "Accesso autorizzato con password"))
+        try persist(next); locked = false; needsPasswordSetup = false; calendarBridge.queue(self)
+    }
+    func changeDailyPassword(current: String, new: String) throws {
+        try require(ready && !locked, "Sblocca prima l’archivio."); try checkAccess(current)
+        var next = db; var access = try DailyAccess.make(new); access.lastDay = DailyAccess.today(Date()); next.dailyAccess = access
+        next.audit.append(Audit(action: "Password aggiornata", recordID: nil, label: "Password giornaliera modificata")); try persist(next)
+    }
+    func lock() {
+        guard ready else { return }
+        needsPasswordSetup = db.dailyAccess == nil; locked = true
+        var next = db; next.dailyAccess?.lastDay = nil
+        do { try persist(next) } catch { self.error = error.localizedDescription }
+    }
 }

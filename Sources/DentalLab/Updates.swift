@@ -7,7 +7,7 @@ final class AppUpdates: ObservableObject {
     @Published var canCheck = false
     @Published var automatic = false
     @Published var started = false
-    var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.4.0" }
+    var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.5.0" }
     func start() {
         guard !started, Bundle.main.bundleURL.pathExtension == "app" else { return }
         started = true
