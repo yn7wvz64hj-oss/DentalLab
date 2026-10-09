@@ -71,13 +71,21 @@ struct ContentView: View {
     @State var backup = false
     @State var movement: Entry?
     @State var workYear = 0
+    @State var workStage = "Tutte le fasi"
+    @State var dueFilter = "Tutte le date"
     var workYears: [Int] { WorkYear.available(store.entries) }
     var active: [Entry] { store.entries.filter { !$0.isArchived } }
     var openWorks: [Entry] { active.filter { $0.section == "Lavori" && $0.status != "Consegnato" } }
+    func matchesProduction(_ e: Entry) -> Bool {
+        guard section == "Lavori" || section == "Scadenze" else { return true }
+        let today = Calendar.current.startOfDay(for: Date())
+        let due = Calendar.current.startOfDay(for: e.date)
+        return (workStage == "Tutte le fasi" || e.status == workStage) && (dueFilter == "Tutte le date" || (e.status != "Consegnato" && (dueFilter == "Oggi" ? due == today : due < today)))
+    }
     var rows: [Entry] {
         store.entries.filter { e in
             let correct = section == "Scadenze" ? (e.section == "Lavori" && e.status != "Consegnato") || (["Qualità", "Sorveglianza"].contains(e.section) && e.status != "Chiuso") : e.section == section
-            return correct && (section != "Lavori" || workYear == 0 || WorkYear.of(e) == workYear) && (filter == "Archiviati" ? e.isArchived : !e.isArchived) && (filter != "Bozze" || e.issued == nil) && (filter != "Registrati" || e.issued != nil) && (search.isEmpty || "\(e.name) \(e.client) \(e.patient) \(e.lot) \(e.issued?.number ?? "") \(e.device?.identifier ?? "")".localizedCaseInsensitiveContains(search))
+            return correct && matchesProduction(e) && (section != "Lavori" || workYear == 0 || WorkYear.of(e) == workYear) && (filter == "Archiviati" ? e.isArchived : !e.isArchived) && (filter != "Bozze" || e.issued == nil) && (filter != "Registrati" || e.issued != nil) && (search.isEmpty || "\(e.name) \(e.client) \(e.patient) \(e.lot) \(e.issued?.number ?? "") \(e.device?.identifier ?? "")".localizedCaseInsensitiveContains(search))
         }.sorted { section == "Scadenze" ? $0.date < $1.date : ($0.updated ?? $0.date) > ($1.updated ?? $1.date) }
     }
     var body: some View {
@@ -102,8 +110,8 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) { BrandMark().frame(width: 36, height: 44).shadow(color: Palette.cyan.opacity(0.3), radius: 12); VStack(alignment: .leading, spacing: 5) { Text("DentalLab").font(.system(size: 23, weight: .semibold, design: .rounded)); Text("LABORATORIO DIGITALE").font(.system(size: 8, weight: .semibold)).tracking(1.7).foregroundColor(Palette.cyan.opacity(0.85)) } }.padding(.horizontal, 22).padding(.top, 38).padding(.bottom, 28)
             ScrollView { VStack(alignment: .leading, spacing: 4) {
-                navGroup("IL TUO SPAZIO", ["Panoramica", "Lavori", "Scadenze"])
-                navGroup("RELAZIONI", ["Pazienti", "Clienti", "Listino"])
+                navGroup("OPERATIVITÀ", ["Panoramica", "Lavori", "Scadenze"])
+                navGroup("ANAGRAFICHE", ["Clienti", "Pazienti", "Listino"])
                 navGroup("AMMINISTRAZIONE", ["Preventivi", "Consegne", "Fatture", "Magazzino"])
                 navGroup("DOCUMENTAZIONE", ["Conformità", "Qualità", "Sorveglianza"])
                 navGroup("ARCHIVIO", ["Attività", "Impostazioni"])
@@ -115,10 +123,10 @@ struct ContentView: View {
     func navGroup(_ title: String, _ items: [String]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 8, weight: .semibold)).tracking(1.4).foregroundColor(.white.opacity(0.55)).padding(.leading, 14).padding(.top, 17).padding(.bottom, 5)
-            ForEach(items, id: \.self) { item in Button { section = item } label: {
+            ForEach(items, id: \.self) { item in Button { section = item; workStage = "Tutte le fasi"; dueFilter = "Tutte le date"; workYear = 0 } label: {
                 HStack(spacing: 11) {
                     Image(systemName: moduleIcon(item)).font(.system(size: 14)).frame(width: 18).foregroundColor(section == item ? Palette.cyan : .white.opacity(0.72))
-                    Text(item).font(.system(size: 12, weight: section == item ? .semibold : .regular)); Spacer()
+                    Text(item == "Panoramica" ? "Oggi · panoramica" : item == "Clienti" ? "Studi e contatti" : item).font(.system(size: 12, weight: section == item ? .semibold : .regular)); Spacer()
                     if item == "Lavori" && !openWorks.isEmpty { Text("\(openWorks.count)").font(.system(size: 10, weight: .semibold)).padding(.horizontal, 7).padding(.vertical, 3).background(Palette.cyan.opacity(0.12)).cornerRadius(6) }
                 }.foregroundColor(section == item ? .white : .white.opacity(0.76)).padding(.horizontal, 14).padding(.vertical, 11)
                     .background(section == item ? Palette.cyan.opacity(0.10) : .clear).cornerRadius(10)
@@ -142,6 +150,14 @@ struct ContentView: View {
     }
     var dashboard: some View {
         VStack(alignment: .leading, spacing: 24) {
+            Surface { HStack(spacing: 14) {
+                SectionHeading(title: "Accesso rapido", subtitle: "Dalla prescrizione alla consegna")
+                Spacer()
+                Button { editing = store.create("Lavori") } label: { Label("Nuovo lavoro", systemImage: "plus") }.buttonStyle(LabButtonStyle(primary: true))
+                Button("Consegne oggi") { section = "Scadenze"; workStage = "Tutte le fasi"; dueFilter = "Oggi" }
+                Button("In ritardo") { section = "Scadenze"; workStage = "Tutte le fasi"; dueFilter = "In ritardo" }
+                Button("Studi e contatti") { section = "Clienti" }
+            } }
             HStack(spacing: 14) {
                 Metric(title: "Lavori aperti", value: "\(openWorks.count)", note: "In tutte le fasi di produzione", icon: "shippingbox")
                 Metric(title: "Consegne scadute", value: "\(openWorks.filter { Calendar.current.startOfDay(for: $0.date) < Calendar.current.startOfDay(for: Date()) }.count)", note: "Da ripianificare o consegnare", icon: "calendar.badge.exclamationmark", color: .orange)
@@ -155,7 +171,7 @@ struct ContentView: View {
                 }.frame(maxWidth: .infinity, alignment: .leading) }
                 Surface { VStack(alignment: .leading, spacing: 18) {
                     SectionHeading(title: "Produzione", subtitle: "Ogni fase, sotto controllo")
-                    ForEach(workStates.dropLast(), id: \.self) { status in HStack { Text(status).font(.system(size: 12)); Spacer(); Text("\(openWorks.filter { $0.status == status }.count)").font(.system(size: 13, weight: .semibold)) }; GeometryReader { g in Capsule().fill(Palette.canvas).overlay(alignment: .leading) { Capsule().fill(Palette.teal.opacity(0.7)).frame(width: g.size.width * CGFloat(openWorks.filter { $0.status == status }.count) / CGFloat(max(1, openWorks.count))) } }.frame(height: 5) }
+                    ForEach(workStates.dropLast(), id: \.self) { status in Button { section = "Lavori"; workStage = status; dueFilter = "Tutte le date" } label: { HStack { Text(status).font(.system(size: 12)); Spacer(); Text("\(openWorks.filter { $0.status == status }.count)").font(.system(size: 13, weight: .semibold)); Image(systemName: "chevron.right").font(.system(size: 9)) }.contentShape(Rectangle()) }.buttonStyle(.plain); GeometryReader { g in Capsule().fill(Palette.canvas).overlay(alignment: .leading) { Capsule().fill(Palette.teal.opacity(0.7)).frame(width: g.size.width * CGFloat(openWorks.filter { $0.status == status }.count) / CGFloat(max(1, openWorks.count))) } }.frame(height: 5) }
                     Divider(); Button { editing = store.create("Lavori") } label: { Label("Aggiungi un lavoro", systemImage: "plus.circle") }.buttonStyle(LabButtonStyle(subtle: true))
                 }.frame(width: 220, alignment: .leading) }
             }
@@ -167,6 +183,12 @@ struct ContentView: View {
     }
     var records: some View {
         VStack(alignment: .leading, spacing: 18) {
+            if section == "Lavori" || section == "Scadenze" { Surface { HStack {
+                Picker("Fase", selection: $workStage) { Text("Tutte le fasi").tag("Tutte le fasi"); ForEach(workStates, id: \.self) { Text($0).tag($0) } }.frame(maxWidth: 250)
+                Picker("Consegna", selection: $dueFilter) { ForEach(["Tutte le date", "Oggi", "In ritardo"], id: \.self) { Text($0).tag($0) } }.frame(maxWidth: 230)
+                Spacer()
+                Button("Azzera filtri") { workStage = "Tutte le fasi"; dueFilter = "Tutte le date"; workYear = 0; search = ""; filter = "Attivi" }
+            } } }
             if section == "Fatture" || section == "Conformità" || section == "Sorveglianza" { Surface { HStack(alignment: .top, spacing: 12) { Image(systemName: "info.circle").foregroundColor(Palette.teal); Text(section == "Fatture" ? "Prepara XML e copia di cortesia. Invio SDI, verifica delle ricevute e conservazione fiscale si effettuano con il servizio fiscale esterno." : section == "Conformità" ? "Modello strutturato per l’Allegato XIII. La completezza dei campi non certifica la conformità del dispositivo; verifica e firma spettano al fabbricante." : "Registra l’esperienza post-produzione e le azioni. Gli incidenti e le segnalazioni alle autorità richiedono la procedura esterna di vigilanza.").font(.system(size: 11)).foregroundColor(.secondary) } } }
             HStack { HStack { Image(systemName: "magnifyingglass").foregroundColor(.secondary); TextField("Cerca in \(section.lowercased())…", text: $search).textFieldStyle(.plain) }.padding(11).background(Color.white).cornerRadius(9).overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.line)).frame(maxWidth: 360); Spacer(); if section == "Lavori" { Picker("Anno di consegna", selection: $workYear) { Text("Tutti gli anni").tag(0); ForEach(workYears, id: \.self) { year in Text(String(year)).tag(year) } }.frame(width: 220) }; Picker("Visualizza", selection: $filter) { Text("Attivi").tag("Attivi"); if documentSections.contains(section) { Text("Bozze").tag("Bozze"); Text("Registrati").tag("Registrati") }; Text("Archiviati").tag("Archiviati") }.labelsHidden().frame(width: 160); Text("\(rows.count) schede").font(.system(size: 11)).foregroundColor(.secondary) }
             Surface { VStack(alignment: .leading, spacing: 0) {
@@ -185,7 +207,7 @@ struct ContentView: View {
     func recordRow(_ e: Entry) -> some View {
         HStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 9).fill(Palette.canvas).frame(width: 40, height: 40).overlay(Image(systemName: moduleIcon(e.section)).foregroundColor(Palette.teal))
-            VStack(alignment: .leading, spacing: 5) { Text(e.label).font(.system(size: 12, weight: .semibold)).foregroundColor(Palette.ink); Text([e.issued != nil ? e.name : "", e.client, e.section == "Magazzino" ? "Lotto " + e.lot : e.device?.identifier ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1) }.frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 5) { Text(e.label).font(.system(size: 12, weight: .semibold)).foregroundColor(Palette.ink); Text([e.issued != nil ? e.name : "", e.client, e.patient, e.section == "Magazzino" ? "Lotto " + e.lot : e.device?.identifier ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1) }.frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 5) {
                 if e.section == "Magazzino" { Text("\(numeric(e.available)) \(e.unit ?? "unità")").font(.system(size: 12, weight: .medium)); if e.available <= (e.minimum ?? 0) { Badge(text: "Scorta minima", color: .orange) } }
                 else if documentSections.contains(e.section) { Badge(text: e.issued == nil ? "Bozza" : "Registrato", color: e.issued == nil ? .gray : Palette.teal); if e.section == "Fatture" || e.section == "Preventivi" { Text(money(e.total)).font(.system(size: 11, weight: .medium)) } }

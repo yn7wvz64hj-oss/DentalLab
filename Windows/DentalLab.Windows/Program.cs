@@ -68,6 +68,11 @@ public sealed class MainWindow : Window
     private readonly DataGrid teeth = new() { Height = 155, AutoGenerateColumns = false, CanUserAddRows = false, EnableRowVirtualization = false };
     private readonly ListBox attachments = new() { Height = 95, DisplayMemberPath = "Label" };
     private readonly StackPanel editor = new();
+    private readonly StackPanel overview = new();
+    private readonly ComboBox workFilter = new() { ItemsSource = new[] { "Tutti gli attivi", "Oggi", "In ritardo", "Da iniziare", "In lavorazione", "In prova", "Pronto", "Consegnato", "Archiviati" }, SelectedIndex = 0 };
+    private readonly TextBlock resultCount = new();
+    private readonly Dictionary<string, Button> navigation = [];
+    private Button? saveAction;
     private readonly Dictionary<int,Button> toothButtons = [];
     private readonly TextBlock workspaceTitle = new() { Text = "Lavori", FontSize = 30, FontWeight = FontWeights.SemiBold };
     private JsonObject? current;
@@ -80,9 +85,9 @@ public sealed class MainWindow : Window
     private sealed record Row(string ID, string Label);
     public MainWindow(LocalArchive archive, bool preview = false)
     {
-        this.archive = archive; Title = "DentalLab · laboratorio digitale"; Width = 1320; Height = 960; MinWidth = 1100; MinHeight = 760;
+        this.archive = archive; Title = "DentalLab · laboratorio digitale"; Width = 1480; Height = 960; MinWidth = 1280; MinHeight = 760;
         var root = new Grid { Background = DesignSystem.Brush("Canvas") }; Content = root;
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) }); root.ColumnDefinitions.Add(new ColumnDefinition());
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(216) }); root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(270) }); root.ColumnDefinitions.Add(new ColumnDefinition());
         var sideBorder = new Border { Background = DesignSystem.Brush("Sidebar"), BorderBrush = new SolidColorBrush(Color.FromRgb(43,85,103)), BorderThickness = new Thickness(0,0,1,0), Padding = new Thickness(20,30,20,22) }; root.Children.Add(sideBorder);
         var sidebar = new DockPanel(); sideBorder.Child = sidebar;
         var sideTop = new StackPanel(); DockPanel.SetDock(sideTop,Dock.Top); sidebar.Children.Add(sideTop); sideTop.Children.Add(DesignSystem.Brand());
@@ -90,18 +95,30 @@ public sealed class MainWindow : Window
         var local = new Border { CornerRadius = new CornerRadius(10), BorderBrush = new SolidColorBrush(Color.FromRgb(43,85,103)), BorderThickness = new Thickness(1), Padding = new Thickness(12), Margin = new Thickness(0,18,0,0) };
         local.Child = new TextBlock { Text = "●  ARCHIVIO LOCALE\nCifrato su questo computer", Foreground = Brushes.LightCyan, FontSize = 11, LineHeight = 20 };
         DockPanel.SetDock(local,Dock.Bottom); sidebar.Children.Add(local);
-        var dock = new DockPanel { Margin = new Thickness(28,22,28,18) }; Grid.SetColumn(dock,1); root.Children.Add(dock);
+        var dock = new DockPanel { Margin = new Thickness(24,22,24,18) }; Grid.SetColumn(dock,2); root.Children.Add(dock);
         var heading = new DockPanel { Margin = new Thickness(0,0,0,20) }; DockPanel.SetDock(heading,Dock.Top); dock.Children.Add(heading);
         var tag = new Border { Background = DesignSystem.Brush("Pale"), CornerRadius = new CornerRadius(18), Padding = new Thickness(12,7,12,7), VerticalAlignment = VerticalAlignment.Top, Child = new TextBlock { Text = "●  Laboratorio digitale", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Accent") } }; DockPanel.SetDock(tag,Dock.Right); heading.Children.Add(tag);
         var titles = new StackPanel(); heading.Children.Add(titles); titles.Children.Add(new TextBlock { Text = "LABORATORIO  /  GESTIONE", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,0,0,6) }); titles.Children.Add(workspaceTitle); titles.Children.Add(new TextBlock { Text = "Ogni dettaglio, in un unico spazio.", FontSize = 13, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,7,0,0) });
         var toolbar = new WrapPanel { Margin = new Thickness(0,0,0,16) }; DockPanel.SetDock(toolbar, Dock.Top); dock.Children.Add(toolbar);
-        Button(toolbar, "Backup USB", Export); Button(toolbar, "Verifica backup", Verify); Button(toolbar, "Ripristina", Restore); Button(toolbar, "Impostazioni", Profile); Button(toolbar, "Cambia password", ChangePassword); Button(toolbar, "Blocca", Lock);
+        Button(toolbar, "Nuovo lavoro", () => { if (Navigate("Lavori")) New(); }); saveAction = Button(toolbar, "Salva scheda", Save); Button(toolbar, "Studi e contatti", () => Navigate("Clienti"));
+        var security = Button(toolbar, "Archivio e sicurezza", () => {}); var securityMenu = new ContextMenu(); security.ContextMenu = securityMenu;
+        foreach (var action in new (string,Action)[] { ("Esporta backup USB", Export), ("Verifica integrità backup", Verify), ("Ripristina backup", Restore), ("Identità laboratorio", Profile), ("Cambia password", ChangePassword), ("Blocca archivio", Lock) }) { var item = new MenuItem { Header = action.Item1 }; item.Click += (_, _) => Perform(action.Item2); securityMenu.Items.Add(item); }
+        security.Click += (_, _) => { securityMenu.PlacementTarget = security; securityMenu.IsOpen = true; };
         var footer = new TextBlock { Text = "Un computer alla volta: esporta e verifica sulla USB, chiudi DentalLab, poi ripristina sull’altro computer.", TextWrapping = TextWrapping.Wrap, Foreground = DesignSystem.Brush("Muted"), FontSize = 11, Margin = new Thickness(0,12,0,0) }; DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer);
-        section.ItemsSource = new[] { "Lavori", "Pazienti", "Clienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza" }; section.SelectedIndex = 0;
-        sideTop.Children.Add(section); sideTop.Children.Add(new TextBlock { Text = "Cerca titolo, paziente o studio", Foreground = Brushes.LightSteelBlue, FontSize = 11, Margin = new Thickness(0,18,0,8) }); sideTop.Children.Add(search);
-        Button(sideTop, "Nuova scheda", New).Margin = new Thickness(0,14,0,18);
-        var listCard = new Border { CornerRadius = new CornerRadius(12), Background = Brushes.White, Padding = new Thickness(4), Child = list }; sidebar.Children.Add(listCard);
-        dock.Children.Add(new ScrollViewer { Content = editor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        section.ItemsSource = new[] { "Panoramica", "Lavori", "Scadenze", "Pazienti", "Clienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza" }; section.SelectedItem = preview ? "Lavori" : "Panoramica";
+        var nav = new StackPanel(); sidebar.Children.Add(new ScrollViewer { Content = nav, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        foreach (var group in new[] { ("OPERATIVITÀ", new[]{"Panoramica","Lavori","Scadenze"}), ("ANAGRAFICHE", new[]{"Clienti","Pazienti","Listino"}), ("AMMINISTRAZIONE", new[]{"Preventivi","Consegne","Fatture","Magazzino"}), ("DOCUMENTAZIONE", new[]{"Conformità","Qualità","Sorveglianza"}) }) {
+            nav.Children.Add(new TextBlock { Text = group.Item1, Foreground = Brushes.LightSteelBlue, FontSize = 9, Margin = new Thickness(0,12,0,8) });
+            foreach (string module in group.Item2) { var item = Button(nav, module == "Panoramica" ? "Oggi · panoramica" : module == "Clienti" ? "Studi e contatti" : module, () => Navigate(module)); item.HorizontalContentAlignment = HorizontalAlignment.Left; item.Margin = new Thickness(0,0,0,3); item.Background = Brushes.Transparent; item.Foreground = Brushes.White; item.BorderBrush = Brushes.Transparent; navigation[module] = item; }
+        }
+        var browser = new DockPanel { Margin = new Thickness(14,22,0,18) }; Grid.SetColumn(browser,1); root.Children.Add(browser);
+        var find = new StackPanel(); DockPanel.SetDock(find,Dock.Top); browser.Children.Add(find);
+        find.Children.Add(DesignSystem.Heading("Archivio")); find.Children.Add(DesignSystem.Caption("Cerca titolo, paziente o studio")); find.Children.Add(search);
+        workFilter.Margin = new Thickness(0,10,0,0); find.Children.Add(workFilter); resultCount.Margin = new Thickness(0,12,0,8); resultCount.FontSize = 11; find.Children.Add(resultCount);
+        Button(find, "Nuova scheda", New).Margin = new Thickness(0,0,0,12);
+        browser.Children.Add(new Border { CornerRadius = new CornerRadius(12), Background = Brushes.White, Padding = new Thickness(4), Child = list });
+        var workspace = new Grid(); workspace.Children.Add(editor); workspace.Children.Add(overview);
+        dock.Children.Add(new ScrollViewer { Content = workspace, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
         var info = new StackPanel(); info.Children.Add(DesignSystem.Heading("Informazioni principali"));
         var form = new Grid(); form.ColumnDefinitions.Add(new ColumnDefinition()); form.ColumnDefinitions.Add(new ColumnDefinition()); info.Children.Add(form);
         var left = new StackPanel { Margin = new Thickness(0,0,10,0) }; var right = new StackPanel { Margin = new Thickness(10,0,0,0) }; form.Children.Add(left); Grid.SetColumn(right,1); form.Children.Add(right);
@@ -119,8 +136,9 @@ public sealed class MainWindow : Window
         var fileButtons = new WrapPanel(); documents.Children.Add(fileButtons); Button(fileButtons, "Aggiungi allegato", Attach); Button(fileButtons, "Esporta allegato", ExportAttachment); Button(fileButtons, "Rimuovi riferimento", RemoveAttachment); editor.Children.Add(DesignSystem.Card(documents));
         var actions = new WrapPanel(); editor.Children.Add(actions); Button(actions, "Salva scheda", Save); Button(actions, "Contatti dello studio", EditContact); Button(actions, "Mostra scheda completa", ShowFullRecord);
         var limitation = new TextBlock { Text = "Documenti registrati e schede archiviate sono in sola lettura. Numerazione fiscale, XML/PDF, magazzino e calendario avanzati si gestiscono sul Mac.", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray }; editor.Children.Add(limitation);
-        section.SelectionChanged += (_, _) => { workspaceTitle.Text = (string)section.SelectedItem; if (unlocked && CanDiscard()) RefreshList(); }; search.TextChanged += (_, _) => { if (unlocked && CanDiscard()) RefreshList(); };
-        list.SelectionChanged += (_, _) => { if (unlocked && list.SelectedItem is Row row && CanDiscard()) Load(row.ID); };
+        section.SelectionChanged += (_, _) => { workspaceTitle.Text = (string)section.SelectedItem == "Panoramica" ? "Il laboratorio, oggi" : (string)section.SelectedItem; if (unlocked) RefreshList(); }; search.TextChanged += (_, _) => { if (!loading && unlocked && CanDiscard()) RefreshList(); };
+        workFilter.SelectionChanged += (_, e) => { if (loading || !unlocked) return; if (CanDiscard()) RefreshList(); else { loading = true; if (e.RemovedItems.Count > 0) workFilter.SelectedItem = e.RemovedItems[0]; loading = false; } };
+        list.SelectionChanged += (_, _) => { if (!loading && unlocked && list.SelectedItem is Row row) { if (!CanDiscard()) { loading = true; list.SelectedItem = list.Items.Cast<Row>().FirstOrDefault(r => r.ID == current?["id"]?.GetValue<string>()); loading = false; return; } if ((string)section.SelectedItem == "Panoramica") Navigate("Lavori"); Load(row.ID); } };
         foreach (var box in new[] { name, patient, detail }) box.TextChanged += (_, _) => MarkDirty();
         client.SelectionChanged += (_, _) => MarkDirty(); client.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource is TextBox input && input.IsKeyboardFocusWithin) MarkDirty(); })); state.SelectionChanged += (_, _) => MarkDirty(); state.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource is TextBox input && input.IsKeyboardFocusWithin) MarkDirty(); })); date.SelectedDateChanged += (_, _) => MarkDirty();
         teeth.CellEditEnding += (_, _) => MarkDirty();
@@ -131,7 +149,8 @@ public sealed class MainWindow : Window
     private void MarkDirty() { if (!loading && current != null && !ReadOnly()) dirty = true; }
     private bool CanDiscard() => !dirty || MessageBox.Show("Scartare le modifiche non salvate?", "DentalLab", MessageBoxButton.YesNo) == MessageBoxResult.Yes;
     private static void Field(Panel panel, string label, UIElement field) { panel.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,9,0,7) }); panel.Children.Add(field); }
-    private Button Button(Panel panel, string label, Action action) { var b = new Button { Content = label, Margin = new Thickness(0,0,7,7) }; if (label is "Salva scheda" or "Nuova scheda" or "Continua") b.Style = (Style)FindResource("PrimaryButton"); b.Click += (_, _) => { try { if (label != "Blocca" && !unlocked) { if (!Access()) return; RefreshList(); } action(); } catch (Exception e) { MessageBox.Show(e.Message, "Operazione non completata"); } }; panel.Children.Add(b); return b; }
+    private Button Button(Panel panel, string label, Action action) { var b = new Button { Content = label, Margin = new Thickness(0,0,7,7) }; if (label is "Salva scheda" or "Nuova scheda" or "Nuovo lavoro" or "Continua") b.Style = (Style)FindResource("PrimaryButton"); b.Click += (_, _) => Perform(action); panel.Children.Add(b); return b; }
+    private void Perform(Action action) { try { if (!unlocked) { if (!Access()) return; RefreshList(); } action(); } catch (Exception e) { MessageBox.Show(e.Message, "Operazione non completata"); } }
     private string? Password(string title, bool repeat = false) { var dialog = new PasswordDialog(title, repeat) { Owner = this }; return dialog.ShowDialog() == true ? dialog.Password : null; }
     private bool Access()
     {
@@ -153,7 +172,7 @@ public sealed class MainWindow : Window
     {
         if (!unlocked || !CanDiscard()) return;
         var next = (JsonObject)archive.Database.DeepClone(); next["dailyAccess"]!["lastDay"] = null; archive.Save(next);
-        unlocked = false; dirty = false; current = null; list.ItemsSource = null; name.Clear(); patient.Clear(); detail.Clear(); client.Text = ""; state.Text = ""; date.SelectedDate = null; toothRows.Clear(); RefreshTeeth(); attachments.ItemsSource = null; editor.IsEnabled = false;
+        unlocked = false; dirty = false; current = null; list.ItemsSource = null; overview.Children.Clear(); resultCount.Text = "Archivio bloccato"; name.Clear(); patient.Clear(); detail.Clear(); client.Text = ""; state.Text = ""; date.SelectedDate = null; toothRows.Clear(); RefreshTeeth(); attachments.ItemsSource = null; editor.IsEnabled = false;
     }
     private void ChangePassword()
     {
@@ -165,13 +184,67 @@ public sealed class MainWindow : Window
     }
     private void RefreshList()
     {
-        loading = true; list.ItemsSource = archive.Database["entries"]!.AsArray().Where(e => e!["section"]!.GetValue<string>() == (string)section.SelectedItem && ($"{e["name"]} {e["patient"]} {e["client"]}").Contains(search.Text, StringComparison.OrdinalIgnoreCase)).Select(e => new Row(e!["id"]!.GetValue<string>(), $"{e["issued"]?["number"] ?? e["name"]} · {e["patient"]}")).ToList();
-        current = null; dirty = false; loading = false;
+        loading = true;
+        string module = (string)section.SelectedItem;
+        bool production = module is "Lavori" or "Scadenze" or "Panoramica";
+        workFilter.Visibility = production ? Visibility.Visible : Visibility.Collapsed;
+        var records = archive.Database["entries"]!.AsArray().OfType<JsonObject>().Where(e => e["section"]!.GetValue<string>() == (production ? "Lavori" : module)).Where(e => ($"{e["name"]} {e["patient"]} {e["client"]}").Contains(search.Text, StringComparison.OrdinalIgnoreCase));
+        string filter = (string)workFilter.SelectedItem;
+        records = records.Where(e => (e["archived"]?.GetValue<bool>() == true) == (filter == "Archiviati" && production));
+        if (production) records = records.Where(e => MatchesWork(e, filter) && (module != "Scadenze" || e["status"]!.GetValue<string>() != "Consegnato"));
+        var rows = records.OrderBy(e => production ? Due(e) : DateTime.MaxValue).Select(e => new Row(e["id"]!.GetValue<string>(), production ? $"{e["name"]}\n{e["client"]} · {e["patient"]}\n{Due(e):dd/MM} · {e["status"]}" : $"{e["issued"]?["number"] ?? e["name"]} · {e["patient"]}")).ToList();
+        list.ItemsSource = rows; resultCount.Text = $"{rows.Count} schede · ordinate per {(production ? "consegna" : "archivio")}";
+        editor.Visibility = module == "Panoramica" ? Visibility.Collapsed : Visibility.Visible; overview.Visibility = module == "Panoramica" ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var (key,item) in navigation) { item.Background = key == module ? DesignSystem.Brush("Accent") : Brushes.Transparent; item.BorderBrush = key == module ? DesignSystem.Brush("Cyan") : Brushes.Transparent; }
+        BuildOverview();
+        current = null; dirty = false; editor.IsEnabled = false; if (saveAction != null) saveAction.IsEnabled = false; loading = false;
+        if (module != "Panoramica" && rows.Count > 0) { loading = true; list.SelectedIndex = 0; loading = false; Load(rows[0].ID); }
     }
+    private static DateTime Due(JsonObject e) => new DateTime(2001,1,1,0,0,0,DateTimeKind.Utc).AddSeconds(e["date"]!.GetValue<double>()).ToLocalTime().Date;
+    private static bool MatchesWork(JsonObject e, string filter) {
+        string status = e["status"]!.GetValue<string>();
+        return filter switch { "Oggi" => Due(e) == DateTime.Today && status != "Consegnato", "In ritardo" => Due(e) < DateTime.Today && status != "Consegnato", "Tutti gli attivi" or "Archiviati" => true, _ => status == filter };
+    }
+    private bool Navigate(string module, string filter = "Tutti gli attivi") {
+        if (!CanDiscard()) return false; dirty = false; loading = true; search.Clear(); workFilter.SelectedItem = filter; loading = false;
+        section.SelectedItem = module; workspaceTitle.Text = module == "Panoramica" ? "Il laboratorio, oggi" : module; RefreshList();
+        return true;
+    }
+    private void BuildOverview() {
+        overview.Children.Clear();
+        if (!unlocked) return;
+        var works = archive.Database["entries"]!.AsArray().OfType<JsonObject>().Where(e => e["section"]!.GetValue<string>() == "Lavori" && e["archived"]?.GetValue<bool>() != true && e["status"]!.GetValue<string>() != "Consegnato").ToList();
+        var summary = new UniformGrid { Columns = 3 };
+        foreach (var metric in new[] { ("Lavori aperti", works.Count, "Tutti gli attivi"), ("Consegne oggi", works.Count(e => Due(e) == DateTime.Today), "Oggi"), ("In ritardo", works.Count(e => Due(e) < DateTime.Today), "In ritardo") }) { var card = new StackPanel(); card.Children.Add(DesignSystem.Caption(metric.Item1)); card.Children.Add(new TextBlock { Text = metric.Item2.ToString(), FontSize = 32, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Accent") }); Button(card,"Apri elenco",()=>Navigate("Lavori",metric.Item3)); summary.Children.Add(DesignSystem.Card(card)); }
+        overview.Children.Add(summary);
+        var flow = new StackPanel(); flow.Children.Add(DesignSystem.Heading("Avanzamento produzione")); flow.Children.Add(DesignSystem.Caption("Apri una fase per vedere le commesse e la prossima consegna."));
+        var stages = new WrapPanel(); flow.Children.Add(stages);
+        foreach (string status in new[] {"Da iniziare","In lavorazione","In prova","Pronto"}) Button(stages,$"{status} · {works.Count(e => e["status"]!.GetValue<string>() == status)}",()=>Navigate("Lavori",status));
+        overview.Children.Add(DesignSystem.Card(flow));
+        var agenda = new StackPanel(); agenda.Children.Add(DesignSystem.Heading("Prossime consegne"));
+        foreach (var e in works.OrderBy(Due).Take(6)) Button(agenda,$"{Due(e):dd/MM}  ·  {e["name"]}\n{e["client"]} · {e["patient"]} · {e["status"]}",()=>{ Navigate("Lavori"); Load(e["id"]!.GetValue<string>()); });
+        if (works.Count == 0) agenda.Children.Add(DesignSystem.Caption("Nessuna consegna aperta. Crea un lavoro per organizzare la produzione."));
+        Button(agenda,"Nuovo lavoro",()=>{ if (Navigate("Lavori")) New(); }); overview.Children.Add(DesignSystem.Card(agenda));
+    }
+    // Called only by the isolated synthetic preview fixture; never on a user's archive.
+    internal void VerifyWorkflow() {
+        void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException("Workspace check: " + message); }
+        Navigate("Lavori", "In ritardo"); Require(list.Items.Count == 1 && name.Text == "Corona in zirconia", "overdue excludes delivered and archived cases");
+        Navigate("Lavori", "Oggi"); Require(list.Items.Count == 1 && name.Text == "Ponte su tre elementi", "today excludes delivered cases");
+        Navigate("Lavori", "Pronto"); Require(list.Items.Count == 1 && name.Text == "Faccette anteriori", "production stage excludes archived cases");
+        Navigate("Lavori", "Archiviati"); Require(list.Items.Count == 1 && ReadOnly(), "archive remains read only");
+        Navigate("Scadenze"); Require(list.Items.Count == 4, "agenda excludes completed cases");
+        Navigate("Clienti"); Require(list.Items.Count == 0 && current == null && !editor.IsEnabled, "empty section cannot edit stale records");
+        Navigate("Panoramica"); Require(overview.Visibility == Visibility.Visible && editor.Visibility == Visibility.Collapsed && overview.Children.Count == 3, "overview switches workspace");
+        Navigate("Lavori"); Require(list.Items.Count == 5 && current != null, "return to active cases");
+        Console.WriteLine("PASS · 8 workspace checks: dates, phases, archive, agenda, selection and overview.");
+    }
+    internal void ShowOverviewPreview() => Navigate("Panoramica");
     private bool ReadOnly() => current == null || current["issued"] != null || current["archived"]?.GetValue<bool>() == true || current["section"]?.GetValue<string>() is "Fatture" or "Magazzino";
     private void Load(string id) { current = (JsonObject)archive.Database["entries"]!.AsArray().First(e => e!["id"]!.GetValue<string>() == id)!.DeepClone(); LoadForm(); }
     private void LoadForm()
     {
+        editor.IsEnabled = true; if (saveAction != null) saveAction.IsEnabled = !ReadOnly();
         loading = true; name.Text = current!["name"]!.GetValue<string>(); patient.Text = current["patient"]!.GetValue<string>(); detail.Text = current["detail"]!.GetValue<string>(); state.Text = current["status"]!.GetValue<string>();
         client.ItemsSource = archive.Database["entries"]!.AsArray().Where(e => e!["section"]!.GetValue<string>() == "Clienti").Select(e => new Row(e!["id"]!.GetValue<string>(), e["name"]!.GetValue<string>())).ToList();
         client.SelectedItem = client.Items.Cast<Row>().FirstOrDefault(r => r.ID == current["clientID"]?.GetValue<string>()); client.Text = current["client"]!.GetValue<string>();
@@ -185,6 +258,8 @@ public sealed class MainWindow : Window
     private void New()
     {
         if (!CanDiscard()) return;
+        dirty = false;
+        if ((string)section.SelectedItem is "Panoramica" or "Scadenze") Navigate("Lavori");
         if ((string)section.SelectedItem is "Fatture" or "Magazzino") throw new InvalidDataException("Crea fatture e materiali dal Mac.");
         current = new JsonObject { ["id"] = LocalArchive.NewID(), ["section"] = (string)section.SelectedItem, ["name"] = "", ["client"] = "", ["patient"] = "", ["detail"] = "", ["status"] = "Da iniziare", ["date"] = LocalArchive.SwiftNow(), ["price"] = 0, ["quantity"] = 0, ["lot"] = "", ["paid"] = false, ["attachments"] = new JsonArray(), ["created"] = LocalArchive.SwiftNow() };
         LoadForm(); dirty = true;
@@ -209,7 +284,7 @@ public sealed class MainWindow : Window
         }
         var next = (JsonObject)archive.Database.DeepClone(); var entries = next["entries"]!.AsArray(); int index = entries.Select((node,i) => (node,i)).Where(p => p.node!["id"]!.GetValue<string>() == e["id"]!.GetValue<string>()).Select(p => p.i).DefaultIfEmpty(-1).First();
         if (index < 0) entries.Add(e); else entries[index] = e;
-        LocalArchive.Audit(next, "Salvataggio Windows", e["id"]!.GetValue<string>()); archive.Save(next); string id = e["id"]!.GetValue<string>(); dirty = false; RefreshList(); Load(id);
+        LocalArchive.Audit(next, "Salvataggio Windows", e["id"]!.GetValue<string>()); archive.Save(next); string id = e["id"]!.GetValue<string>(); dirty = false; RefreshList(); list.SelectedItem = list.Items.Cast<Row>().FirstOrDefault(r => r.ID == id); Load(id);
     }
     internal static JsonObject NewDevice()
     {

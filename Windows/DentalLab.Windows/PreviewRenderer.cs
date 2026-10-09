@@ -19,14 +19,21 @@ public static class PreviewRenderer
         try {
             using var archive = new LocalArchive(folder, RandomNumberGenerator.GetBytes(32));
             var db = LocalArchive.NewDatabase(); db["profile"]!["name"] = "Laboratorio Forma";
-            foreach (var title in new[] { "Corona in zirconia", "Ponte su tre elementi", "Faccette anteriori", "Bite notturno", "Protesi mobile" }) {
+            int index = 0;
+            foreach (var title in new[] { "Corona in zirconia", "Ponte su tre elementi", "Faccette anteriori", "Bite notturno", "Protesi mobile", "Lavoro archiviato" }) {
                 var work = new JsonObject { ["id"] = LocalArchive.NewID(), ["section"] = "Lavori", ["name"] = title, ["client"] = "Studio Rossi", ["patient"] = "P-2026-042", ["detail"] = "Prescrizione ricevuta. Verificare il colore in prova prima della consegna.", ["status"] = "In lavorazione", ["date"] = LocalArchive.SwiftNow(), ["price"] = 0, ["quantity"] = 0, ["lot"] = "", ["paid"] = false, ["attachments"] = new JsonArray() };
                 work["device"] = MainWindow.NewDevice();
+                work["status"] = new[]{"In lavorazione","In prova","Pronto","Da iniziare","Consegnato","Pronto"}[index];
+                work["date"] = LocalArchive.SwiftNow() + new[]{-1,0,1,2,0,-1}[index] * 86400;
+                if (index == 5) work["archived"] = true;
+                index++;
                 work["device"]!["toothWorks"] = new JsonArray(new JsonObject { ["tooth"] = 11, ["kind"] = "Corona in zirconia", ["shadeSystem"] = "VITA classical A1–D4", ["shade"] = "A2" }, new JsonObject { ["tooth"] = 21, ["kind"] = "Faccetta", ["shadeSystem"] = "VITA 3D-MASTER", ["shade"] = "2M2" });
                 db["entries"]!.AsArray().Add(work);
             }
             archive.Save(db);
-            var window = new MainWindow(archive, preview: true); var content = (FrameworkElement)window.Content;
+            var window = new MainWindow(archive, preview: true); window.VerifyWorkflow();
+            if (Environment.GetEnvironmentVariable("DENTALLAB_PREVIEW_MODULE") == "Panoramica") window.ShowOverviewPreview();
+            var content = (FrameworkElement)window.Content;
             content.Measure(new Size(1440,1160)); content.Arrange(new Rect(0,0,1440,1160)); content.UpdateLayout();
             content.Dispatcher.Invoke(() => {}, System.Windows.Threading.DispatcherPriority.Background);
             content.UpdateLayout();
