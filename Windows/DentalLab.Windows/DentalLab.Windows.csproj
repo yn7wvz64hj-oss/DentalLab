@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>DentalLab</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../DentalLab.Core/DentalLab.Core.csproj" /></ItemGroup>
+</Project>

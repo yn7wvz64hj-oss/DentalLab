@@ -5,6 +5,7 @@ import PDFKit
 
 struct SelfTests {
     static func run() throws {
+        try BackupChecks.run()
         try DentalChartChecks.run()
         var deadlineWork = Entry(section: "Lavori"); deadlineWork.name = "Nome clinico da non inviare"; deadlineWork.patient = "Paziente riservato"
         deadlineWork.date = ISO8601DateFormatter().date(from: "2026-03-29T12:00:00Z")!
@@ -61,7 +62,7 @@ struct SelfTests {
         var declaration = store.create("Conformità", from: work); declaration.name = "Dichiarazione incompleta"; try require(!store.record(declaration), "Dichiarazione incompleta registrata"); store.error = ""
         let attachmentURL = folder.appendingPathComponent("prescrizione-test.txt"); try Data("Allegato di prova".utf8).write(to: attachmentURL)
         let attachment = try store.attach(attachmentURL, category: "Prescrizione"); work.files = [attachment]; try require(store.save(work), store.error)
-        let encrypted = try Data(contentsOf: folder.appendingPathComponent("archivio.dlvault")); try require(String(data: encrypted, encoding: .utf8)?.contains("Studio di prova") != true, "Archivio in chiaro")
+        let encrypted = try Data(contentsOf: folder.appendingPathComponent("archivio.sqlite")); try require(String(data: encrypted, encoding: .utf8)?.contains("Studio di prova") != true, "Archivio in chiaro")
         let backup = folder.appendingPathComponent("test.dlbackup"); try store.backup(password: "Password-test-1234", to: backup)
         let backupData = try Data(contentsOf: backup)
         var wrongRejected = false; do { _ = try Vault.restore(backupData, password: "sbagliata") } catch { wrongRejected = true }; try require(wrongRejected, "Password errata accettata")

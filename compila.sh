@@ -5,7 +5,7 @@ bash Tools/setup-sparkle.sh
 mkdir -p .build/ModuleCache DentalLab.app/Contents/MacOS DentalLab.app/Contents/Resources
 cp Resources/DentalLab.icns DentalLab.app/Contents/Resources/
 xcrun clang -c Sources/CryptoSupport/CryptoSupport.c -I Sources/CryptoSupport/include -o .build/CryptoSupport.o
-xcrun swiftc -D DIRECT_BUILD -module-cache-path .build/ModuleCache -import-objc-header Sources/CryptoSupport/include/CryptoSupport.h -F Vendor -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks -O -parse-as-library Sources/DentalLab/*.swift .build/CryptoSupport.o -o DentalLab.app/Contents/MacOS/DentalLab
+xcrun swiftc -I Sources/CSQLite -lsqlite3 -D DIRECT_BUILD -module-cache-path .build/ModuleCache -import-objc-header Sources/CryptoSupport/include/CryptoSupport.h -F Vendor -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks -O -parse-as-library Sources/DentalLab/*.swift .build/CryptoSupport.o -o DentalLab.app/Contents/MacOS/DentalLab
 mkdir -p DentalLab.app/Contents/Frameworks
 ditto Vendor/Sparkle.framework DentalLab.app/Contents/Frameworks/Sparkle.framework
 cat > DentalLab.app/Contents/Info.plist <<'PLIST'

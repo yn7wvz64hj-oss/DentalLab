@@ -7,3 +7,8 @@ DentalLab.app/
 .DS_Store
 Vendor/Sparkle.framework/
 Vendor/bin/
+**/bin/
+**/obj/
+*.sqlite
+*.sqlite-journal
+*.tmp

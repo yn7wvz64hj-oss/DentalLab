@@ -1,0 +1,66 @@
+name: Archive and desktop compatibility
+on:
+  pull_request:
+  push:
+    branches: [main, 'feat/portable-local-archive']
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet build Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release
+      - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
+        env:
+          DENTALLAB_FIXTURE_OUTPUT: fixtures
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-fixture
+          path: fixtures/windows.dlbackup
+      - run: dotnet publish Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release -r win-x64 --self-contained true -o dist/windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-Windows-x64
+          path: dist/windows
+  macos:
+    needs: windows
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-fixture
+          path: fixtures/in
+      - run: bash compila.sh
+      - run: DentalLab.app/Contents/MacOS/DentalLab --self-test
+        env:
+          DENTALLAB_FIXTURE_INPUT: fixtures/in
+          DENTALLAB_FIXTURE_OUTPUT: fixtures/out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swift-fixture
+          path: fixtures/out/swift.dlbackup
+      - run: ditto -c -k --keepParent DentalLab.app DentalLab-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-macOS-Intel
+          path: DentalLab-macOS.zip
+  roundtrip:
+    needs: macos
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-fixture
+          path: fixtures
+      - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
+        env:
+          DENTALLAB_FIXTURE_INPUT: fixtures
