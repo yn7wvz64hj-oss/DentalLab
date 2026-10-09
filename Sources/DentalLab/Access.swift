@@ -70,7 +70,7 @@ struct PasswordPanel: View {
         Surface { VStack(alignment: .leading, spacing: 14) {
             SectionHeading(title: "Password giornaliera", subtitle: "Richiesta al primo avvio di ogni giorno, secondo la data del Mac.")
             Text("Il lucchetto blocca subito l’app e richiede nuovamente la password. La password di accesso è distinta da quella dei backup; l’archivio resta cifrato con la chiave nel Portachiavi del Mac.").font(.caption).foregroundColor(.secondary)
-            HStack { SecureField("Password attuale", text: $current); SecureField("Nuova password", text: $newPassword); SecureField("Ripeti nuova password", text: $confirmation) }.textFieldStyle(.roundedBorder)
+            VStack(alignment: .leading, spacing: 12) { SecureField("Password attuale", text: $current); SecureField("Nuova password · almeno 10 caratteri", text: $newPassword); SecureField("Ripeti nuova password", text: $confirmation) }.textFieldStyle(.roundedBorder).controlSize(.large).frame(maxWidth: 480)
             Button("Cambia password") {
                 do { try require(newPassword == confirmation, "Le password non coincidono."); try store.changeDailyPassword(current: current, new: newPassword); issue = "Password aggiornata." }
                 catch { issue = error.localizedDescription }

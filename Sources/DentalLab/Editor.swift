@@ -18,7 +18,9 @@ struct Editor: View {
     @State var registering = false
     @State var paying = false
     @State var sdi = false
-    init(entry: Entry, initialTab: String = "Scheda") { _tab = State(initialValue: initialTab); var e = entry; if e.contact == nil { e.contact = Contact() }; if e.device == nil { e.device = Device() }; if e.quality == nil { e.quality = Quality() }; _entry = State(initialValue: e) }
+    @State var closing = false
+    let original: Entry
+    init(entry: Entry, initialTab: String = "Scheda") { _tab = State(initialValue: initialTab); var e = entry; if e.contact == nil { e.contact = Contact() }; if e.device == nil { e.device = Device() }; if e.quality == nil { e.quality = Quality() }; _entry = State(initialValue: e); original = e }
     var readOnly: Bool { entry.issued != nil || entry.isArchived }
     var contact: Binding<Contact> { Binding(get: { entry.contact ?? Contact() }, set: { entry.contact = $0 }) }
     var device: Binding<Device> { Binding(get: { entry.device ?? Device() }, set: { entry.device = $0 }) }
@@ -28,7 +30,7 @@ struct Editor: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) { Image(systemName: moduleIcon(entry.section)).font(.system(size: 22)).foregroundColor(Palette.teal).padding(14).background(Palette.teal.opacity(0.08)).cornerRadius(12); VStack(alignment: .leading, spacing: 6) { Text(entry.name.isEmpty ? "Nuova scheda" : entry.name).font(.system(size: 23, weight: .semibold)); Text("\(entry.section) · \(entry.issued?.number ?? "In preparazione")").font(.system(size: 11)).foregroundColor(.secondary) }; Spacer(); Badge(text: entry.issued != nil ? "Registrato · sola lettura" : entry.isArchived ? "Archiviato" : "Bozza", color: readOnly ? Palette.teal : .gray) }.padding(24).background(Color.white)
-            HStack(spacing: 22) { ForEach(tabs, id: \.self) { item in Button { tab = item } label: { VStack(spacing: 10) { Text(item).font(.system(size: 12, weight: tab == item ? .semibold : .regular)).foregroundColor(tab == item ? Palette.teal : .secondary); Rectangle().fill(tab == item ? Palette.teal : .clear).frame(height: 2) } }.buttonStyle(.plain) }; Spacer() }.padding(.horizontal, 26).padding(.top, 14).background(Color.white)
+            HStack(spacing: 22) { ForEach(tabs, id: \.self) { item in Button { tab = item } label: { VStack(spacing: 10) { Text(item).font(.system(size: 12, weight: tab == item ? .semibold : .regular)).foregroundColor(tab == item ? Palette.teal : .secondary); Capsule().fill(tab == item ? Palette.teal : .clear).frame(height: 3) } }.buttonStyle(.plain) }; Spacer() }.padding(.horizontal, 26).padding(.top, 14).background(Color.white)
             ScrollView { VStack(alignment: .leading, spacing: 18) {
                 if tab == "Scheda" { general.disabled(readOnly) }
                 if tab == "Mappa dentale" { DentalChart(works: Binding(get: { entry.device?.toothWorks ?? [] }, set: { entry.device?.toothWorks = $0 }), readOnly: readOnly) }
@@ -39,10 +41,12 @@ struct Editor: View {
                 if tab == "Incassi" { paymentsView }
             }.padding(24) }.background { WorkspaceBackdrop() }
             Divider()
-            HStack { Button("Chiudi") { dismiss() }.keyboardShortcut(.cancelAction); Button { Documents.exportPDF(entry, db: store.db, store: store) } label: { Label("PDF", systemImage: "arrow.down.doc") }; if entry.section == "Fatture" && entry.issued != nil { Button("XML…") { Documents.exportXML(entry, store: store) } }; Spacer(); if documentSections.contains(entry.section) && !readOnly { Button("Registra documento…") { registering = true } }; if !readOnly { Button("Salva bozza") { if store.save(entry) { dismiss() } }.buttonStyle(LabButtonStyle(primary: true)).keyboardShortcut(.defaultAction) } }.padding(20).background(Color.white)
+            HStack { Button("Chiudi") { if !readOnly && entry != original { closing = true } else { dismiss() } }.keyboardShortcut(.cancelAction); Button { Documents.exportPDF(entry, db: store.db, store: store) } label: { Label("PDF", systemImage: "arrow.down.doc") }; if entry.section == "Fatture" && entry.issued != nil { Button("XML…") { Documents.exportXML(entry, store: store) } }; Spacer(); if documentSections.contains(entry.section) && !readOnly { Button("Registra documento…") { registering = true } }; if !readOnly { Button("Salva bozza") { if store.save(entry) { dismiss() } }.buttonStyle(LabButtonStyle(primary: true)).keyboardShortcut(.defaultAction) } }.padding(20).background(Color.white)
         }.buttonStyle(LabButtonStyle()).frame(width: min(990, (NSScreen.main?.visibleFrame.width ?? 1100) - 60), height: min(770, (NSScreen.main?.visibleFrame.height ?? 850) - 70)).tint(Palette.teal)
-        .alert("Registrare il documento?", isPresented: $registering) { Button("Annulla", role: .cancel) {}; Button("Registra") { if store.record(entry) { dismiss() } } } message: { Text("Verrà assegnato un numero progressivo e il contenuto sarà bloccato. Verifica i dati e il trattamento fiscale. La registrazione non equivale all’invio SDI o alla firma della dichiarazione.") }
-        .alert("Operazione non completata", isPresented: Binding(get: { !store.error.isEmpty }, set: { if !$0 { store.error = "" } })) { Button("OK") { store.error = "" } } message: { Text(store.error) }
+        .interactiveDismissDisabled(!readOnly && entry != original)
+        .sheet(isPresented: $closing) { LabConfirmation(title: "Modifiche non salvate", message: "La scheda contiene modifiche non salvate. Torna alla scheda per salvarle oppure conferma la chiusura per scartarle.", actionTitle: "Scarta e chiudi", cancelTitle: "Torna alla scheda", cancel: { closing = false }, action: { closing = false; dismiss() }) }
+        .sheet(isPresented: $registering) { LabConfirmation(title: "Registrare il documento?", message: "Verrà assegnato un numero progressivo e il contenuto sarà bloccato. Verifica i dati e il trattamento fiscale. La registrazione non equivale all’invio SDI o alla firma della dichiarazione.", actionTitle: "Registra documento", cancel: { registering = false }, action: { registering = false; if store.record(entry) { dismiss() } }) }
+        .labAlert("Operazione non completata", isPresented: Binding(get: { !store.error.isEmpty }, set: { if !$0 { store.error = "" } })) { Button("OK") { store.error = "" } } message: { Text(store.error) }
         .sheet(isPresented: $paying) { PaymentEditor(entryID: entry.id).environmentObject(store) }
         .sheet(isPresented: $sdi) { SDIEditor(entryID: entry.id).environmentObject(store) }
     }
@@ -53,7 +57,7 @@ struct Editor: View {
                 Field(title: entry.section == "Clienti" ? "Ragione sociale / nome dello studio" : entry.section == "Pazienti" ? "Codice identificativo del paziente" : "Titolo / riferimento", text: $entry.name)
                 if !["Clienti", "Magazzino", "Listino"].contains(entry.section) { customerPicker }
                 if ["Lavori", "Conformità", "Pazienti"].contains(entry.section) { Field(title: "Paziente: codice, acronimo o nome", text: $entry.patient) }
-                HStack(spacing: 24) { DatePicker(entry.section == "Lavori" ? "Consegna prevista" : "Data documento / scadenza", selection: $entry.date, displayedComponents: .date); if entry.section == "Lavori" { Picker("Stato", selection: $entry.status) { ForEach(workStates, id: \.self) { Text($0).tag($0) } } } }
+                HStack(spacing: 24) { DatePicker(entry.section == "Lavori" ? "Consegna prevista" : "Data documento / scadenza", selection: $entry.date, displayedComponents: .date); if entry.section == "Lavori" { LabPicker("Stato", selection: $entry.status) { ForEach(workStates, id: \.self) { Text($0).tag($0) } } } }
                 if !["Lavori", "Clienti", "Pazienti", "Magazzino", "Listino"].contains(entry.section) { workPicker }
             } }
             if entry.section == "Clienti" { Surface { VStack(alignment: .leading, spacing: 18) { SectionHeading(title: "Dati fiscali e contatti"); ContactEditor(contact: contact) } } }
@@ -67,11 +71,11 @@ struct Editor: View {
     }
     var customerPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Cliente", selection: Binding<UUID?>(get: { entry.clientID }, set: { id in entry.clientID = id; entry.client = store.entries.first { $0.id == id }?.name ?? "" })) { Text("Seleziona un cliente").tag(nil as UUID?); ForEach(store.entries.filter { $0.section == "Clienti" && !$0.isArchived }) { Text($0.name).tag(Optional($0.id)) } }
+            LabPicker("Cliente", selection: Binding<UUID?>(get: { entry.clientID }, set: { id in entry.clientID = id; entry.client = store.entries.first { $0.id == id }?.name ?? "" })) { Text("Seleziona un cliente").tag(nil as UUID?); ForEach(store.entries.filter { $0.section == "Clienti" && !$0.isArchived }) { Text($0.name).tag(Optional($0.id)) } }
             if entry.clientID == nil && !entry.client.isEmpty { Text("Riferimento precedente: \(entry.client)").font(.caption).foregroundColor(.secondary) }
         }
     }
-    var workPicker: some View { Picker("Lavoro collegato", selection: Binding<UUID?>(get: { entry.workID }, set: { entry.workID = $0 })) { Text("Nessun collegamento").tag(nil as UUID?); ForEach(store.entries.filter { $0.section == "Lavori" && !$0.isArchived }) { Text($0.name).tag(Optional($0.id)) } } }
+    var workPicker: some View { LabPicker("Lavoro collegato", selection: Binding<UUID?>(get: { entry.workID }, set: { entry.workID = $0 })) { Text("Nessun collegamento").tag(nil as UUID?); ForEach(store.entries.filter { $0.section == "Lavori" && !$0.isArchived }) { Text($0.name).tag(Optional($0.id)) } } }
     var deliveryFields: some View {
         let d = Binding<Delivery>(get: { entry.delivery ?? Delivery() }, set: { entry.delivery = $0 })
         return Surface { VStack(alignment: .leading, spacing: 18) { SectionHeading(title: "Trasporto e destinazione"); Field(title: "Destinatario", text: d.recipient); Field(title: "Indirizzo di consegna", text: d.address); HStack { Field(title: "Vettore / trasporto a cura di", text: d.carrier); Field(title: "Causale trasporto", text: d.reason) }; HStack { DatePicker("Data trasporto", selection: d.transportDate, displayedComponents: [.date, .hourAndMinute]); Stepper("Colli: \(d.wrappedValue.packages)", value: d.packages, in: 1...999) } } }
@@ -89,9 +93,9 @@ struct Editor: View {
     var fiscalFields: some View {
         Surface { VStack(alignment: .leading, spacing: 18) {
             SectionHeading(title: "Condizioni economiche", subtitle: "Imposta aliquota o natura fiscale in ogni riga. Il bollo è configurato manualmente.")
-            if entry.section == "Fatture" { Picker("Tipo documento", selection: Binding(get: { entry.invoiceType ?? "TD01" }, set: { entry.invoiceType = $0 })) { Text("TD01 · Fattura").tag("TD01"); Text("TD04 · Nota di credito").tag("TD04") } }
-            if entry.invoiceType == "TD04" { Picker("Fattura da rettificare", selection: Binding<UUID?>(get: { entry.relatedInvoiceID }, set: { entry.relatedInvoiceID = $0 })) { Text("Seleziona fattura").tag(nil as UUID?); ForEach(store.entries.filter { $0.section == "Fatture" && $0.issued != nil && $0.invoiceType != "TD04" }) { Text($0.label + " · " + $0.client).tag(Optional($0.id)) } } }
-            HStack { DatePicker("Scadenza pagamento", selection: Binding(get: { entry.paymentDue ?? entry.date }, set: { entry.paymentDue = $0 }), displayedComponents: .date); Picker("Modalità", selection: Binding(get: { entry.paymentMethod ?? "MP05" }, set: { entry.paymentMethod = $0 })) { Text("Bonifico").tag("MP05"); Text("Contanti").tag("MP01"); Text("Carta").tag("MP08") } }
+            if entry.section == "Fatture" { LabPicker("Tipo documento", selection: Binding(get: { entry.invoiceType ?? "TD01" }, set: { entry.invoiceType = $0 })) { Text("TD01 · Fattura").tag("TD01"); Text("TD04 · Nota di credito").tag("TD04") } }
+            if entry.invoiceType == "TD04" { LabPicker("Fattura da rettificare", selection: Binding<UUID?>(get: { entry.relatedInvoiceID }, set: { entry.relatedInvoiceID = $0 })) { Text("Seleziona fattura").tag(nil as UUID?); ForEach(store.entries.filter { $0.section == "Fatture" && $0.issued != nil && $0.invoiceType != "TD04" }) { Text($0.label + " · " + $0.client).tag(Optional($0.id)) } } }
+            HStack { DatePicker("Scadenza pagamento", selection: Binding(get: { entry.paymentDue ?? entry.date }, set: { entry.paymentDue = $0 }), displayedComponents: .date); LabPicker("Modalità", selection: Binding(get: { entry.paymentMethod ?? "MP05" }, set: { entry.paymentMethod = $0 })) { Text("Bonifico").tag("MP05"); Text("Contanti").tag("MP01"); Text("Carta").tag("MP08") } }
             HStack { Text("Bollo addebitato (€)").font(.system(size: 12)); TextField("Bollo", value: Binding(get: { entry.stamp ?? 0 }, set: { entry.stamp = $0 }), format: .number).textFieldStyle(.roundedBorder).frame(width: 100) }
             totals
         } }
@@ -99,8 +103,8 @@ struct Editor: View {
     var qualityFields: some View {
         Surface { VStack(alignment: .leading, spacing: 18) {
             SectionHeading(title: entry.section == "Qualità" ? "Valutazione e azioni" : "Sorveglianza post-produzione")
-            Picker("Tipo registrazione", selection: quality.kind) { ForEach(entry.section == "Qualità" ? ["Non conformità", "Controllo", "Azione correttiva", "Verifica efficacia"] : ["Reclamo", "Incidente", "Piano PMS", "Piano PMCF", "Rapporto PMS", "PSUR", "Azione di sicurezza"], id: \.self) { Text($0).tag($0) } }
-            HStack { Picker("Stato", selection: $entry.status) { Text("Aperto").tag("Aperto"); Text("In verifica").tag("In verifica"); Text("Chiuso").tag("Chiuso") }; Field(title: "Responsabile", text: quality.owner); Picker("Gravità", selection: quality.severity) { ForEach(["Da valutare", "Minore", "Maggiore", "Potenziale incidente grave"], id: \.self) { Text($0).tag($0) } } }
+            LabPicker("Tipo registrazione", selection: quality.kind) { ForEach(entry.section == "Qualità" ? ["Non conformità", "Controllo", "Azione correttiva", "Verifica efficacia"] : ["Reclamo", "Incidente", "Piano PMS", "Piano PMCF", "Rapporto PMS", "PSUR", "Azione di sicurezza"], id: \.self) { Text($0).tag($0) } }
+            HStack { LabPicker("Stato", selection: $entry.status) { Text("Aperto").tag("Aperto"); Text("In verifica").tag("In verifica"); Text("Chiuso").tag("Chiuso") }; Field(title: "Responsabile", text: quality.owner); LabPicker("Gravità", selection: quality.severity) { ForEach(["Da valutare", "Minore", "Maggiore", "Potenziale incidente grave"], id: \.self) { Text($0).tag($0) } } }
             NoteField(title: "Analisi / causa / valutazione", text: quality.cause)
             NoteField(title: "Azioni e piano", text: quality.action)
             NoteField(title: "Risultati e verifica dell’efficacia", text: quality.result)
@@ -111,8 +115,8 @@ struct Editor: View {
         VStack(spacing: 18) {
             Surface { VStack(alignment: .leading, spacing: 18) {
                 SectionHeading(title: "Dispositivo su misura")
-                HStack { Field(title: "Identificativo dispositivo", text: device.identifier); Picker("Tipologia", selection: device.type) { ForEach(["Protesi fissa", "Protesi mobile", "Ortodonzia", "Bite", "Riparazione", "Altro"], id: \.self) { Text($0).tag($0) } } }
-                HStack { Picker("Classe di rischio", selection: device.riskClass) { ForEach(["Da valutare", "I", "IIa", "IIb", "III"], id: \.self) { Text($0).tag($0) } }; Toggle("Dispositivo impiantabile", isOn: device.implantable) }
+                HStack { Field(title: "Identificativo dispositivo", text: device.identifier); LabPicker("Tipologia", selection: device.type) { ForEach(["Protesi fissa", "Protesi mobile", "Ortodonzia", "Bite", "Riparazione", "Altro"], id: \.self) { Text($0).tag($0) } } }
+                HStack { LabPicker("Classe di rischio", selection: device.riskClass) { ForEach(["Da valutare", "I", "IIa", "IIb", "III"], id: \.self) { Text($0).tag($0) } }; Toggle("Dispositivo impiantabile", isOn: device.implantable) }
                 Text("La classe e l’eventuale impiantabilità devono essere valutate dal fabbricante.").font(.caption).foregroundColor(.secondary)
                 if entry.device?.toothWorks != nil { Text("Elementi dalla mappa: " + (entry.device?.dentalElements ?? "")).font(.caption); Text("Colori dalla mappa: " + (entry.device?.dentalShades ?? "")).font(.caption).foregroundColor(.secondary) }
                 else { HStack { Field(title: "Elementi dentali / arcata (testo precedente)", text: device.teeth); Field(title: "Colore / scala (testo precedente)", text: device.shade) } }
@@ -146,7 +150,7 @@ struct Editor: View {
     var totals: some View { HStack { Spacer(); VStack(alignment: .trailing, spacing: 8) { Text("Imponibile \(money(entry.net))").font(.system(size: 12)).foregroundColor(.secondary); Text("IVA \(money(entry.tax))").font(.system(size: 12)).foregroundColor(.secondary); Text("Totale \(money(entry.total))").font(.system(size: 22, weight: .semibold)).foregroundColor(Palette.ink) } }.padding(12) }
     var attachmentView: some View {
         Surface { VStack(alignment: .leading, spacing: 18) {
-            HStack { SectionHeading(title: "Archivio allegati", subtitle: "I file vengono copiati e cifrati nell’archivio."); Spacer(); if !readOnly { Picker("Categoria", selection: $attachmentCategory) { ForEach(["Generale", "Prescrizione", "Progettazione", "Materiali", "Rischi", "Valutazione clinica", "Controlli", "Istruzioni", "Ricevuta SDI"], id: \.self) { Text($0).tag($0) } }.frame(width: 190); Button("Aggiungi…", action: attach) } }
+            HStack { SectionHeading(title: "Archivio allegati", subtitle: "I file vengono copiati e cifrati nell’archivio."); Spacer(); if !readOnly { LabPicker("Categoria", selection: $attachmentCategory) { ForEach(["Generale", "Prescrizione", "Progettazione", "Materiali", "Rischi", "Valutazione clinica", "Controlli", "Istruzioni", "Ricevuta SDI"], id: \.self) { Text($0).tag($0) } }.frame(width: 190); Button("Aggiungi…", action: attach) } }
             ForEach(entry.files ?? []) { f in HStack { Image(systemName: "doc").foregroundColor(Palette.teal); VStack(alignment: .leading, spacing: 4) { Text(f.name).font(.system(size: 12, weight: .medium)); Text(f.category).font(.caption).foregroundColor(.secondary) }; Spacer(); Button("Esporta…") { store.exportAttachment(f) }; if !readOnly { Button { entry.files?.removeAll { $0.id == f.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(LabButtonStyle(subtle: true)) } }; Divider() }
             if (entry.files ?? []).isEmpty { Text("Nessun allegato. Puoi aggiungere foto, PDF, STL e altri file fino a 100 MB ciascuno.").font(.system(size: 12)).foregroundColor(.secondary).padding(.vertical, 30) }
         } }
@@ -177,7 +181,7 @@ struct LinesEditor: View {
             ForEach($lines) { $line in VStack(alignment: .leading, spacing: 12) {
                 HStack { Field(title: "Descrizione", text: $line.title); if !readOnly { Button { lines.removeAll { $0.id == line.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(LabButtonStyle(subtle: true)) } }
                 HStack(spacing: 15) { number("Quantità", $line.quantity); number("Prezzo unitario €", $line.unitPrice); number("Sconto %", $line.discount); number("IVA %", $line.vat); VStack(alignment: .trailing, spacing: 7) { Text("Imponibile").font(.caption).foregroundColor(.secondary); Text(money(line.net)).font(.system(size: 14, weight: .semibold)) }.frame(width: 120) }
-                if line.vat == 0 { HStack { Picker("Natura", selection: $line.nature) { Text("Da definire").tag(""); ForEach(InvoiceXML.natures, id: \.self) { Text($0).tag($0) } }.frame(width: 180); Field(title: "Riferimento fiscale / motivo esenzione", text: $line.taxReference) } }
+                if line.vat == 0 { HStack { LabPicker("Natura", selection: $line.nature) { Text("Da definire").tag(""); ForEach(InvoiceXML.natures, id: \.self) { Text($0).tag($0) } }.frame(width: 180); Field(title: "Riferimento fiscale / motivo esenzione", text: $line.taxReference) } }
                 Divider()
             }.disabled(readOnly) }
             if lines.isEmpty { Text("Aggiungi le lavorazioni. Nessun trattamento IVA viene scelto automaticamente.").font(.system(size: 12)).foregroundColor(.secondary).padding(.vertical, 24) }

@@ -37,3 +37,7 @@ Le vecchie assegnazioni decidue restano nei dati e nel riepilogo, nei documenti 
 ### Direzione visiva futuristica
 
 La testata della schermata usa blu notte e testo chiaro. I pannelli hanno un effetto vetro chiaro ottenuto con gradienti e trasparenza, bordi ciano e una piccola linea ciano/viola. I pulsanti principali sfumano dall'indaco al petrolio; il fondo mostra una griglia tecnica tenue. Il contrasto rimane alto nei campi e nei dati, senza animazioni continue. Il fondo viene disegnato con geometrie vettoriali native, evitando dipendenze da effetti Metal sul Mac e mantenendo invisibili alle interazioni le decorazioni.
+
+## Menu e conferme
+
+I menu a tendina usano campi arrotondati, etichette esplicite, selezione leggibile e indicatore di apertura. Windows conserva la digitazione libera nei campi modificabili e la navigazione da tastiera; macOS mantiene i menu di sistema in un contenitore coerente con le schede. Le finestre di conferma, errore, registrazione, ripristino e chiusura mostrano titolo, riepilogo e azioni separate. Le operazioni delicate non hanno la conferma come azione predefinita. Chiudere una scheda modificata su Mac richiede di scartare esplicitamente le modifiche. Le finestre di scelta file rimangono quelle del sistema operativo.

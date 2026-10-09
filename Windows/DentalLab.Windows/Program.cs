@@ -21,13 +21,13 @@ public static class Program
         using var instance = new Mutex(false, @"Global\DentalLab.LocalArchive"); bool owns = false;
         try {
             try { owns = instance.WaitOne(0); } catch (AbandonedMutexException) { owns = true; }
-            if (!owns) { MessageBox.Show("DentalLab è già aperto su questo computer."); return; }
+            if (!owns) { NoticeDialog.Show("DentalLab è già aperto su questo computer."); return; }
             var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DentalLab");
             // A separate local folder enables recovery when the original key/archive is damaged.
             if (args.Length == 2 && args[0] == "--archive") folder = Path.GetFullPath(args[1]);
             using var archive = new LocalArchive(folder);
             var app = new Application(); DesignSystem.Install(app); app.Run(new MainWindow(archive));
-        } catch (Exception e) { MessageBox.Show("Avvio non riuscito. I dati esistenti sono conservati.\n" + e.Message + "\nPer recuperare usa un backup portabile e una nuova cartella locale: DentalLab.exe --archive C:\\Percorso\\Recupero", "DentalLab"); }
+        } catch (Exception e) { NoticeDialog.Show("Avvio non riuscito. I dati esistenti sono conservati.\n" + e.Message + "\nPer recuperare usa un backup portabile e una nuova cartella locale: DentalLab.exe --archive C:\\Percorso\\Recupero", "DentalLab"); }
         finally { if (owns) instance.ReleaseMutex(); }
     }
 }
@@ -44,8 +44,8 @@ public sealed class PasswordDialog : Window
         panel.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,18) }); panel.Children.Add(password);
         if (repeat) { panel.Children.Add(new TextBlock { Text = "Ripeti la password", Margin = new Thickness(0,12,0,4) }); panel.Children.Add(confirmation); }
         var button = new Button { Content = "Continua", Style = (Style)FindResource("PrimaryButton"), Margin = new Thickness(0,20,0,0), Padding = new Thickness(12), IsDefault = true };
-        button.Click += (_, _) => { if (repeat && Password != confirmation.Password) { MessageBox.Show("Le password non coincidono."); return; } DialogResult = true; };
-        panel.Children.Add(button); Loaded += (_, _) => password.Focus();
+        button.Click += (_, _) => { if (repeat && Password != confirmation.Password) { NoticeDialog.Show("Le password non coincidono."); return; } DialogResult = true; };
+        panel.Children.Add(button); var cancel = new Button { Content = "Annulla", IsCancel = true, Margin = new Thickness(0,10,0,0) }; panel.Children.Add(cancel); Loaded += (_, _) => password.Focus();
     }
 }
 
@@ -167,27 +167,27 @@ public sealed class MainWindow : Window
         teeth.CellEditEnding += (_, _) => MarkDirty();
         if (!preview) Closing += (_, e) => { if (!CanDiscard()) e.Cancel = true; };
         if (preview) { unlocked = true; RefreshList(); if (list.Items.Count > 0) { list.SelectedIndex = 0; Load(((Row)list.Items[0]).ID); } }
-        else Loaded += (_, _) => { try { if (!Access()) Close(); else { RefreshList(); if (list.Items.Count > 0) list.SelectedIndex = 0; } } catch (Exception e) { MessageBox.Show(e.Message); Close(); } };
+        else Loaded += (_, _) => { try { if (!Access()) Close(); else { RefreshList(); if (list.Items.Count > 0) list.SelectedIndex = 0; } } catch (Exception e) { NoticeDialog.Show(e.Message); Close(); } };
     }
     private void MarkDirty() { if (!loading && current != null && !ReadOnly()) dirty = true; }
-    private bool CanDiscard() => !dirty || MessageBox.Show("Scartare le modifiche non salvate?", "DentalLab", MessageBoxButton.YesNo) == MessageBoxResult.Yes;
+    private bool CanDiscard() => !dirty || NoticeDialog.Show("La scheda contiene modifiche non salvate. Annulla per tornare alla scheda e salvarle, oppure conferma per scartarle.", "Modifiche non salvate", MessageBoxButton.YesNo) == MessageBoxResult.Yes;
     private static void Field(Panel panel, string label, UIElement field) { panel.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,9,0,7) }); panel.Children.Add(field); }
-    private Button Button(Panel panel, string label, Action action) { var b = new Button { Content = label, Margin = new Thickness(0,0,7,7) }; if (label is "Salva scheda" or "Nuova scheda" or "Nuovo lavoro" or "Continua") b.Style = (Style)FindResource("PrimaryButton"); b.Click += (_, _) => Perform(action); panel.Children.Add(b); return b; }
-    private void Perform(Action action) { try { if (!unlocked) { if (!Access()) return; RefreshList(); } action(); } catch (Exception e) { MessageBox.Show(e.Message, "Operazione non completata"); } }
+    private Button Button(Panel panel, string label, Action action) { var b = new Button { Content = label, Margin = new Thickness(0,0,7,7) }; if (label is "Salva scheda" or "Nuova scheda" or "Nuovo lavoro" or "Continua" or "Salva" or "Applica alla scheda") b.Style = (Style)FindResource("PrimaryButton"); b.Click += (_, _) => Perform(action); panel.Children.Add(b); return b; }
+    private void Perform(Action action) { try { if (!unlocked) { if (!Access()) return; RefreshList(); } action(); } catch (Exception e) { NoticeDialog.Show(e.Message, "Operazione non completata"); } }
     private string? Password(string title, bool repeat = false) { var dialog = new PasswordDialog(title, repeat) { Owner = this }; return dialog.ShowDialog() == true ? dialog.Password : null; }
     private bool Access()
     {
-        if (DateTime.UtcNow < retryAfter) { MessageBox.Show("Attendi 30 secondi prima di riprovare."); return false; }
+        if (DateTime.UtcNow < retryAfter) { NoticeDialog.Show("Attendi 30 secondi prima di riprovare."); return false; }
         JsonNode? access = archive.Database["dailyAccess"];
         if (access != null && access["lastDay"]?.GetValue<string>() == DateTime.Now.ToString("yyyy-MM-dd")) { unlocked = true; editor.IsEnabled = true; return true; }
         string? password = Password(access == null ? "Imposta password di accesso (almeno 10 caratteri)" : "Password di accesso", access == null); if (password == null) return false;
         var next = (JsonObject)archive.Database.DeepClone();
         if (access == null) {
-            if (password.EnumerateRunes().Count() < 10) { MessageBox.Show("Usa almeno 10 caratteri."); return Access(); }
+            if (password.EnumerateRunes().Count() < 10) { NoticeDialog.Show("Usa almeno 10 caratteri."); return Access(); }
             byte[] salt = RandomNumberGenerator.GetBytes(16); next["dailyAccess"] = new JsonObject { ["salt"] = Convert.ToBase64String(salt), ["verifier"] = Convert.ToBase64String(BackupCodec.Derive(password, salt)) };
         } else {
             byte[] salt = Convert.FromBase64String(access["salt"]!.GetValue<string>()), verifier = Convert.FromBase64String(access["verifier"]!.GetValue<string>());
-            if (salt.Length != 16 || verifier.Length != 32 || !CryptographicOperations.FixedTimeEquals(verifier, BackupCodec.Derive(password, salt))) { if (++failed >= 5) retryAfter = DateTime.UtcNow.AddSeconds(30); MessageBox.Show("Password non corretta."); return Access(); }
+            if (salt.Length != 16 || verifier.Length != 32 || !CryptographicOperations.FixedTimeEquals(verifier, BackupCodec.Derive(password, salt))) { if (++failed >= 5) retryAfter = DateTime.UtcNow.AddSeconds(30); NoticeDialog.Show("Password non corretta."); return Access(); }
         }
         next["dailyAccess"]!["lastDay"] = DateTime.Now.ToString("yyyy-MM-dd"); LocalArchive.Audit(next, "Accesso Windows"); archive.Save(next); unlocked = true; failed = 0; editor.IsEnabled = true; return true;
     }
@@ -328,38 +328,38 @@ public sealed class MainWindow : Window
         string id = LocalArchive.NewID(); archive.SaveBlob(id, File.ReadAllBytes(dialog.FileName)); current!["files"] ??= new JsonArray(); current["files"]!.AsArray().Add(new JsonObject { ["id"] = id, ["name"] = Path.GetFileName(dialog.FileName), ["category"] = "Generale" }); dirty = true; RefreshAttachments();
     }
     private void RemoveAttachment() { if (ReadOnly()) throw new InvalidDataException("Scheda in sola lettura."); if (attachments.SelectedItem is Row row) { var files = current!["files"]!.AsArray(); files.Remove(files.First(f => f!["id"]!.GetValue<string>() == row.ID)); dirty = true; RefreshAttachments(); } }
-    private void ExportAttachment() { if (attachments.SelectedItem is not Row row) return; var dialog = new SaveFileDialog { FileName = Path.GetFileName(row.Label) }; if (dialog.ShowDialog() == true) { LocalArchive.AtomicWrite(dialog.FileName, archive.Blob(row.ID)); MessageBox.Show("Allegato esportato in chiaro."); } }
+    private void ExportAttachment() { if (attachments.SelectedItem is not Row row) return; var dialog = new SaveFileDialog { FileName = Path.GetFileName(row.Label) }; if (dialog.ShowDialog() == true) { LocalArchive.AtomicWrite(dialog.FileName, archive.Blob(row.ID)); NoticeDialog.Show("Allegato esportato in chiaro."); } }
     private void Export()
     {
         if (dirty) throw new InvalidDataException("Salva o scarta le modifiche prima del backup.");
         string? password = Password("Password backup (almeno 12 caratteri)", true); if (password == null) return;
-        var dialog = new SaveFileDialog { Filter = "Backup DentalLab|*.dlbackup", FileName = $"DentalLab-{DateTime.Now:yyyy-MM-dd}.dlbackup" }; if (dialog.ShowDialog() == true) { archive.Export(dialog.FileName, password); MessageBox.Show("Backup cifrato esportato e verificato. Chiudi DentalLab prima di passare all’altro computer."); }
+        var dialog = new SaveFileDialog { Filter = "Backup DentalLab|*.dlbackup", FileName = $"DentalLab-{DateTime.Now:yyyy-MM-dd}.dlbackup" }; if (dialog.ShowDialog() == true) { archive.Export(dialog.FileName, password); NoticeDialog.Show("Backup cifrato esportato e verificato. Chiudi DentalLab prima di passare all’altro computer."); }
     }
     private string? BackupPath() { var dialog = new OpenFileDialog { Filter = "Backup DentalLab|*.dlbackup" }; return dialog.ShowDialog() == true ? dialog.FileName : null; }
-    private void Verify() { string? path = BackupPath(); if (path == null) return; string? password = Password("Password del backup"); if (password == null) return; var payload = archive.VerifyBackup(path, password); MessageBox.Show($"Backup verificato: {payload["database"]!["entries"]!.AsArray().Count} schede, {payload["files"]!.AsObject().Count} allegati."); }
+    private void Verify() { string? path = BackupPath(); if (path == null) return; string? password = Password("Password del backup"); if (password == null) return; var payload = archive.VerifyBackup(path, password); NoticeDialog.Show($"Backup verificato: {payload["database"]!["entries"]!.AsArray().Count} schede, {payload["files"]!.AsObject().Count} allegati."); }
     private void Restore()
     {
         if (!CanDiscard()) return; string? path = BackupPath(); if (path == null) return; string? password = Password("Password del backup"); if (password == null) return;
         var payload = archive.VerifyBackup(path, password);
-        if (MessageBox.Show($"Backup verificato: {payload["database"]!["entries"]!.AsArray().Count} schede. Sostituire l’archivio? Prima verrà salvata una copia completa locale. Il ripristino sostituisce le schede, senza unire gli archivi.", "Ripristino", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
-        string rescue = archive.Restore(path, password); dirty = false; RefreshList(); MessageBox.Show("Ripristino completato. Copia preventiva:\n" + rescue);
+        if (NoticeDialog.Show($"Backup verificato: {payload["database"]!["entries"]!.AsArray().Count} schede. Sostituire l’archivio? Prima verrà salvata una copia completa locale. Il ripristino sostituisce le schede, senza unire gli archivi.", "Ripristino", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        string rescue = archive.Restore(path, password); dirty = false; RefreshList(); NoticeDialog.Show("Ripristino completato. Copia preventiva:\n" + rescue);
     }
     private void Profile()
     {
         var window = new Window { Title = "Identità laboratorio", Owner = this, Width = 480, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        var panel = new StackPanel { Margin = new Thickness(20) }; window.Content = panel; var profile = (JsonObject)archive.Database["profile"]!.DeepClone(); var lab = new TextBox { Text = profile["name"]!.GetValue<string>() }; Field(panel, "Ragione sociale", lab);
-        var fields = new Dictionary<string,TextBox>(); foreach (var key in new[] { "address", "zip", "city", "province", "email", "phone", "vat" }) { var field = new TextBox { Text = profile["contact"]![key]!.GetValue<string>() }; fields.Add(key, field); Field(panel, key, field); }
-        Button(panel, "Salva", () => { profile["name"] = lab.Text; foreach (var (key,field) in fields) profile["contact"]![key] = field.Text; var next = (JsonObject)archive.Database.DeepClone(); next["profile"] = profile; LocalArchive.Audit(next, "Impostazioni Windows"); archive.Save(next); window.Close(); }); window.ShowDialog();
+        var panel = new StackPanel { Margin = new Thickness(28) }; window.Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; window.MaxHeight = SystemParameters.WorkArea.Height - 80; panel.Children.Add(DesignSystem.Heading(window.Title)); panel.Children.Add(DesignSystem.Caption("Aggiorna i dati, poi conferma il salvataggio.")); var profile = (JsonObject)archive.Database["profile"]!.DeepClone(); var lab = new TextBox { Text = profile["name"]!.GetValue<string>() }; Field(panel, "Ragione sociale", lab);
+        var fields = new Dictionary<string,TextBox>(); foreach (var key in new[] { "address", "zip", "city", "province", "email", "phone", "vat" }) { var field = new TextBox { Text = profile["contact"]![key]!.GetValue<string>() }; fields.Add(key, field); Field(panel, new Dictionary<string,string> { ["address"]="Indirizzo", ["zip"]="CAP", ["city"]="Città", ["province"]="Provincia", ["email"]="Email", ["phone"]="Telefono", ["vat"]="Partita IVA" }[key], field); }
+        Button(panel, "Salva", () => { profile["name"] = lab.Text; foreach (var (key,field) in fields) profile["contact"]![key] = field.Text; var next = (JsonObject)archive.Database.DeepClone(); next["profile"] = profile; LocalArchive.Audit(next, "Impostazioni Windows"); archive.Save(next); window.Close(); }); var cancel = new Button { Content = "Annulla", IsCancel = true, Margin = new Thickness(0,10,0,0) }; panel.Children.Add(cancel); window.ShowDialog();
     }
     private void EditContact()
     {
         if (ReadOnly() || current?["section"]?.GetValue<string>() != "Clienti") throw new InvalidDataException("Seleziona una scheda studio modificabile in Clienti.");
         var contact = (JsonObject)(current["contact"] ?? LocalArchive.NewDatabase()["profile"]!["contact"]!).DeepClone();
         var window = new Window { Title = "Contatti e dati dello studio", Owner = this, Width = 460, Height = 720, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        var panel = new StackPanel { Margin = new Thickness(20) }; window.Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var panel = new StackPanel { Margin = new Thickness(28) }; window.Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; panel.Children.Add(DesignSystem.Heading(window.Title)); panel.Children.Add(DesignSystem.Caption("Le modifiche saranno registrate con Salva scheda."));
         var fields = new Dictionary<string,TextBox>(); var labels = new Dictionary<string,string> { ["vat"]="Partita IVA", ["taxCode"]="Codice fiscale", ["address"]="Indirizzo", ["zip"]="CAP", ["city"]="Città", ["province"]="Provincia", ["email"]="Email", ["phone"]="Telefono", ["recipient"]="Codice destinatario", ["pec"]="PEC" };
         foreach (var (key,label) in labels) { var box = new TextBox { Text = contact[key]?.GetValue<string>() ?? "" }; fields[key] = box; Field(panel, label, box); }
-        Button(panel, "Applica alla scheda", () => { foreach (var (key,box) in fields) contact[key] = box.Text; current["contact"] = contact; dirty = true; window.Close(); }); window.ShowDialog();
+        Button(panel, "Applica alla scheda", () => { foreach (var (key,box) in fields) contact[key] = box.Text; current["contact"] = contact; dirty = true; window.Close(); }); var cancel = new Button { Content = "Annulla", IsCancel = true, Margin = new Thickness(0,10,0,0) }; panel.Children.Add(cancel); window.ShowDialog();
     }
     private void ShowFullRecord()
     {
@@ -374,6 +374,10 @@ public sealed class MainWindow : Window
             } else if (node is JsonArray array) foreach (var value in array) { text.Append(' ',depth*2).AppendLine("•"); Render(value,depth+1); }
         }
         Render(current,0);
-        var window = new Window { Title = "Scheda completa · sola lettura", Owner = this, Width = 780, Height = 650, Content = new TextBox { Text = text.ToString(), IsReadOnly = true, AcceptsReturn = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, TextWrapping = TextWrapping.Wrap } }; window.ShowDialog();
+        var window = new Window { Title = "Scheda completa · sola lettura", Owner = this, Width = 780, Height = 650, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        var panel = new DockPanel { Margin = new Thickness(28) }; window.Content = panel;
+        var heading = DesignSystem.Heading(window.Title); DockPanel.SetDock(heading,Dock.Top); panel.Children.Add(heading);
+        var close = new Button { Content = "Chiudi", IsCancel = true, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0,16,0,0) }; close.Click += (_,_) => window.Close(); DockPanel.SetDock(close,Dock.Bottom); panel.Children.Add(close);
+        panel.Children.Add(new TextBox { Text = text.ToString(), IsReadOnly = true, AcceptsReturn = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, TextWrapping = TextWrapping.Wrap }); window.ShowDialog();
     }
 }

@@ -44,6 +44,19 @@ public static class PreviewRenderer
             var toothContent = new System.Windows.Controls.Border { Background = DesignSystem.Brush("Canvas"), Child = toothPanel }; toothContent.Measure(new Size(480,490)); toothContent.Arrange(new Rect(0,0,480,490)); toothContent.UpdateLayout();
             var toothImage = new RenderTargetBitmap(480,490,96,96,PixelFormats.Pbgra32); toothImage.Render(toothContent); var toothEncoder = new PngBitmapEncoder(); toothEncoder.Frames.Add(BitmapFrame.Create(toothImage));
             using (var stream = File.Create(Path.Combine(Path.GetDirectoryName(output)!, "DentalLab-Dente-preview.png"))) toothEncoder.Save(stream);
+            // Editable dropdowns must retain free text and update it on selection.
+            var picker = new System.Windows.Controls.ComboBox { Style = (Style)app.FindResource(typeof(System.Windows.Controls.ComboBox)), IsEditable = true, ItemsSource = new[]{"A1","A2"}, Text = "Personalizzato" };
+            picker.Measure(new Size(300,50)); picker.Arrange(new Rect(0,0,300,50)); picker.ApplyTemplate();
+            if (picker.Text != "Personalizzato" || picker.Template.FindName("PART_EditableTextBox", picker) is not System.Windows.Controls.TextBox) throw new InvalidOperationException("Editable picker lost its text or input part.");
+            picker.SelectedItem = "A2"; if (picker.Text != "A2") throw new InvalidOperationException("Picker selection does not update editable text.");
+            var notice = new NoticeDialog("Modifiche non salvate", "La scheda contiene modifiche non salvate. Annulla per continuare a lavorare oppure conferma per scartarle e chiudere.", true);
+            var noticePanel = (FrameworkElement)notice.Content; notice.Content = null;
+            var noticeContent = new System.Windows.Controls.Border { Background = DesignSystem.Brush("Canvas"), Child = noticePanel };
+            noticeContent.Measure(new Size(540,390)); noticeContent.Arrange(new Rect(0,0,540,390)); noticeContent.UpdateLayout();
+            var noticeImage = new RenderTargetBitmap(540,390,96,96,PixelFormats.Pbgra32); noticeImage.Render(noticeContent);
+            var noticeEncoder = new PngBitmapEncoder(); noticeEncoder.Frames.Add(BitmapFrame.Create(noticeImage));
+            using (var stream = File.Create(Path.Combine(Path.GetDirectoryName(output)!, "DentalLab-Conferma-preview.png"))) noticeEncoder.Save(stream);
+            notice.Close(); Console.WriteLine("Editable dropdown checks passed.");
             toothDialog.Close();
             window.Close(); Console.WriteLine("Preview rendered: " + output);
         } finally { if (Directory.Exists(folder)) Directory.Delete(folder,true); app.Shutdown(); }
