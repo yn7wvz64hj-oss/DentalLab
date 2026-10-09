@@ -112,7 +112,7 @@ struct CalendarPanel: View {
             SectionHeading(title: "Google Calendar", subtitle: "Usa l’account Google già aggiunto a Calendario sul Mac.")
             Text("Invia solo codice lavoro e data di consegna, per l’intera giornata. Nomi, pazienti e dettagli clinici restano nell’archivio. Scegli preferibilmente un calendario Google dedicato a DentalLab.").font(.caption).foregroundColor(.secondary)
             HStack { Button("Autorizza calendari") { bridge.connect() }; Button("Aggiorna elenco") { bridge.refresh() } }
-            Picker("Calendario", selection: $selected) {
+            LabPicker("Calendario", selection: $selected) {
                 Text("Seleziona un calendario").tag("")
                 ForEach(bridge.calendars, id: \.calendarIdentifier) { Text($0.source.title + " · " + $0.title).tag($0.calendarIdentifier) }
             }
@@ -128,9 +128,10 @@ struct CalendarPanel: View {
             if let last = store.db.calendarLink?.lastSync { Text("Ultimo aggiornamento locale: " + last.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundColor(.secondary) }
             if !bridge.message.isEmpty { Text(bridge.message).font(.caption).foregroundColor(Palette.teal) }
         } }.onAppear { bridge.refresh(); selected = store.db.calendarLink?.calendarID ?? ""; automatic = store.db.calendarLink?.automatic ?? false }
-        .alert("Conferma sincronizzazione", isPresented: $confirm) {
-            Button("Annulla", role: .cancel) {}
+        .labAlert("Conferma sincronizzazione", isPresented: $confirm) {
+            Button("Annulla", role: .cancel) { confirm = false }
             Button("Conferma") {
+                confirm = false
                 var link = store.db.calendarLink ?? CalendarLink(calendarID: selected)
                 if link.calendarID != selected { link = CalendarLink(calendarID: selected) }
                 link.automatic = automatic

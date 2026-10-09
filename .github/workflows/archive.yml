@@ -1,0 +1,83 @@
+name: Archive and desktop compatibility
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet build Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release
+      - run: dotnet Windows/DentalLab.Windows/bin/Release/net8.0-windows/DentalLab.dll --preview previews/windows.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-design-preview
+          path: previews/windows.png
+      - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
+        env:
+          DENTALLAB_FIXTURE_OUTPUT: fixtures
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-fixture
+          path: fixtures/windows.dlbackup
+      - run: dotnet publish Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release -r win-x64 --self-contained true -o dist/windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-Windows-x64
+          path: dist/windows
+  macos:
+    needs: windows
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-fixture
+          path: fixtures/in
+      - run: bash compila.sh
+      - run: |
+          mkdir -p previews
+          DentalLab.app/Contents/MacOS/DentalLab --preview "$PWD/previews/macos.png"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-design-preview
+          path: previews/macos.png
+      - run: |
+          if ! DentalLab.app/Contents/MacOS/DentalLab --self-test; then
+            lldb --batch -o run -o 'thread backtrace all' -- DentalLab.app/Contents/MacOS/DentalLab --self-test
+            exit 1
+          fi
+        env:
+          DENTALLAB_FIXTURE_INPUT: fixtures/in
+          DENTALLAB_FIXTURE_OUTPUT: fixtures/out
+          SWIFT_BACKTRACE: 'enable=yes,demangle=yes,interactive=no'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swift-fixture
+          path: fixtures/out/swift.dlbackup
+      - run: ditto -c -k --keepParent DentalLab.app DentalLab-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-macOS-Intel
+          path: DentalLab-macOS.zip
+  roundtrip:
+    needs: macos
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-fixture
+          path: fixtures
+      - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
+        env:
+          DENTALLAB_FIXTURE_INPUT: fixtures

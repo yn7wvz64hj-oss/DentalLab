@@ -20,6 +20,7 @@ final class Store: ObservableObject {
     private var key: SymmetricKey?
     private var lockFD: Int32 = -1
     private var ownsLock = false
+    private var sqlite: SQLiteArchive?
     var entries: [Entry] { db.entries }
     init(folder: URL = root, testKey: SymmetricKey? = nil) {
         self.folder = folder
@@ -30,7 +31,14 @@ final class Store: ObservableObject {
             try require(lockFD >= 0 && flock(lockFD, LOCK_EX | LOCK_NB) == 0, "L’archivio è già aperto in un’altra istanza di DentalLab.")
             ownsLock = true
             let file = folder.appendingPathComponent("archivio.dlvault")
-            key = try testKey ?? Vault.localKey(create: !FileManager.default.fileExists(atPath: file.path))
+            let sqliteURL = folder.appendingPathComponent("archivio.sqlite")
+            let existingSQLite = FileManager.default.fileExists(atPath: sqliteURL.path)
+            key = try testKey ?? Vault.localKey(create: !existingSQLite && !FileManager.default.fileExists(atPath: file.path))
+            if existingSQLite {
+                sqlite = try SQLiteArchive(url: sqliteURL, create: false)
+                db = try JSONDecoder().decode(Database.self, from: Vault.open(sqlite!.read(), key: key!))
+                try require(db.version == 2, "Versione dell’archivio non supportata.")
+            } else {
             if FileManager.default.fileExists(atPath: file.path) { db = try JSONDecoder().decode(Database.self, from: Vault.open(Data(contentsOf: file), key: key!)); try require(db.version == 2, "Versione dell’archivio non supportata.") }
             else if FileManager.default.fileExists(atPath: folder.appendingPathComponent("archivio.json").path) {
                 db.entries = try JSONDecoder().decode([Entry].self, from: Data(contentsOf: folder.appendingPathComponent("archivio.json")))
@@ -48,6 +56,10 @@ final class Store: ObservableObject {
                 try persist(db, backup: false)
                 notice = "Archivio precedente importato. Le vecchie copie JSON e gli allegati in chiaro sono ancora presenti: verifica il backup prima di rimuoverle."
             } else { db.profile.regime = "RF01"; try persist(db, backup: false) }
+            // The encrypted legacy source remains untouched and recoverable.
+            sqlite = try SQLiteArchive.install(Vault.seal(JSONEncoder().encode(db), key: key!), at: sqliteURL)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sqliteURL.path)
+            }
             ready = true
             if usesDailyGate { refreshDailyLock() }
         } catch { self.error = error.localizedDescription }
@@ -57,6 +69,11 @@ final class Store: ObservableObject {
         guard let key = key else { throw AppIssue(message: "Archivio bloccato: chiave non disponibile.") }
         let file = folder.appendingPathComponent("archivio.dlvault")
         let data = try Vault.seal(JSONEncoder().encode(next), key: key)
+        if let sqlite = sqlite {
+            try sqlite.write(data, history: backup)
+            db = next
+            return
+        }
         if backup && FileManager.default.fileExists(atPath: file.path) {
             let path = folder.appendingPathComponent("BackupLocali"); try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
             let name = String(Int(Date().timeIntervalSince1970 * 1000)) + "-" + UUID().uuidString.prefix(6)
@@ -154,29 +171,68 @@ final class Store: ObservableObject {
             if let workID = workID, let wi = next.entries.firstIndex(where: { $0.id == workID }) { var uses = next.entries[wi].materialUses ?? []; uses.append(MaterialUse(stockID: stockID, quantity: -delta)); next.entries[wi].materialUses = uses }
         }
     }
-    func saveBlob(_ data: Data, id: UUID) throws { guard let key = key else { throw AppIssue(message: "Chiave non disponibile.") }; let path = folder.appendingPathComponent("FileCifrati"); try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true); try Vault.seal(data, key: key).write(to: path.appendingPathComponent(id.uuidString), options: .atomic) }
+    private func blobFolder(_ database: Database) throws -> URL {
+        let path = folder.appendingPathComponent("FileCifrati")
+        guard let generation = database.fileGeneration else { return path }
+        try require(UUID(uuidString: generation)?.uuidString == generation, "Generazione allegati non valida.")
+        return path.appendingPathComponent(generation)
+    }
+    func saveBlob(_ data: Data, id: UUID) throws { guard let key = key else { throw AppIssue(message: "Chiave non disponibile.") }; let path = try blobFolder(db); try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true); try Vault.seal(data, key: key).write(to: path.appendingPathComponent(id.uuidString), options: .atomic) }
     func attach(_ url: URL, category: String) throws -> Attachment { let data = try Data(contentsOf: url); try require(data.count <= 100 * 1024 * 1024, "Il limite per un allegato è 100 MB."); let f = Attachment(name: url.lastPathComponent, category: category); try saveBlob(data, id: f.id); return f }
-    func blob(_ id: UUID) throws -> Data { guard let key = key else { throw AppIssue(message: "Chiave non disponibile.") }; return try Vault.open(Data(contentsOf: folder.appendingPathComponent("FileCifrati").appendingPathComponent(id.uuidString)), key: key) }
+    func blob(_ id: UUID) throws -> Data { guard let key = key else { throw AppIssue(message: "Chiave non disponibile.") }; return try Vault.open(Data(contentsOf: blobFolder(db).appendingPathComponent(id.uuidString)), key: key) }
     func exportAttachment(_ f: Attachment) { let panel = NSSavePanel(); panel.nameFieldStringValue = f.name; if panel.runModal() == .OK, let url = panel.url { do { try blob(f.id).write(to: url, options: .atomic); notice = "Allegato esportato. La copia scelta non è cifrata dall’app." } catch { self.error = error.localizedDescription } } }
     func backup(password: String, to url: URL) throws {
         try require(ready && !locked, "Archivio non disponibile."); var files: [String: Data] = [:]; var size = 0
         for f in db.entries.flatMap({ $0.files ?? [] }) where files[f.id.uuidString] == nil { let data = try blob(f.id); size += data.count; try require(size <= 500 * 1024 * 1024, "Backup portabile oltre 500 MB: riduci gli allegati o pianifica un archivio più grande."); files[f.id.uuidString] = data }
-        try Vault.portable(PortableBackup(database: db, files: files), password: password).write(to: url, options: .atomic)
+        try sqlite?.verify()
+        var portableDatabase = db; portableDatabase.fileGeneration = nil
+        let data = try Vault.portable(PortableBackup(database: portableDatabase, files: files), password: password)
+        _ = try Vault.restore(data, password: password)
+        try data.write(to: url, options: .atomic)
+        _ = try verifyBackup(password: password, from: url)
         notice = "Backup completo cifrato esportato. Conserva la password separatamente."
+    }
+    @discardableResult
+    func verifyBackup(password: String, from url: URL) throws -> PortableBackup {
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        try require(size > 52 && size <= 750 * 1024 * 1024, "Dimensione backup non valida o superiore a 750 MB.")
+        return try Vault.restore(Data(contentsOf: url), password: password)
     }
     func restore(password: String, from url: URL) throws {
         try require(ownsLock && !locked, "L’archivio è bloccato o aperto in un’altra istanza.")
-        let payload = try Vault.restore(Data(contentsOf: url), password: password)
+        let payload = try verifyBackup(password: password, from: url)
+        // Complete encrypted rescue copy, including attachments, before any mutation.
+        let rescue = folder.appendingPathComponent("PrimaDelRipristino").appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: rescue, withIntermediateDirectories: true)
+        for name in ["archivio.sqlite", "archivio.dlvault", "archivio.json", "FileCifrati", "Allegati"] {
+            let source = folder.appendingPathComponent(name)
+            if name == "archivio.sqlite", let sqlite = sqlite { try sqlite.snapshot(to: rescue.appendingPathComponent(name)) }
+            else if FileManager.default.fileExists(atPath: source.path) { try FileManager.default.copyItem(at: source, to: rescue.appendingPathComponent(name)) }
+        }
+        let generation = UUID().uuidString
+        let staged = folder.appendingPathComponent("FileCifrati").appendingPathComponent(generation)
+        var completed = false
+        defer { if !completed { try? FileManager.default.removeItem(at: staged) } }
         if key == nil { key = try Vault.localKey(create: true) }
-        // New attachment identifiers keep the previous archive intact if restoration fails.
-        var mapping: [String: UUID] = [:]
-        for (name, data) in payload.files { try require(UUID(uuidString: name) != nil, "Identificativo allegato non valido."); let id = UUID(); try saveBlob(data, id: id); mapping[name] = id }
+        // A new physical generation preserves logical attachment IDs and issued digests.
+        try FileManager.default.createDirectory(at: staged, withIntermediateDirectories: true)
+        for (name, data) in payload.files {
+            let target = staged.appendingPathComponent(name)
+            try Vault.seal(data, key: key!).write(to: target, options: .atomic)
+            try require(try Vault.open(Data(contentsOf: target), key: key!) == data, "Verifica allegato non riuscita.")
+        }
         var next = payload.database
+        next.fileGeneration = generation
         next.calendarLink = nil
         next.dailyAccess = db.dailyAccess
         for (series, value) in db.counters { next.counters[series] = max(next.counters[series] ?? 0, value) }
-        for i in next.entries.indices { if var files = next.entries[i].files { for j in files.indices { guard let id = mapping[files[j].id.uuidString] else { throw AppIssue(message: "Allegato mancante.") }; files[j].id = id }; next.entries[i].files = files } }
-        next.audit.append(Audit(action: "Ripristino", recordID: nil, label: "Backup completo ripristinato")); try persist(next); ready = true; error = ""; notice = "Backup ripristinato."; if usesDailyGate { refreshDailyLock() }
+        next.audit.append(Audit(action: "Ripristino", recordID: nil, label: "Backup completo ripristinato"))
+        if sqlite == nil {
+            let sqliteURL = folder.appendingPathComponent("archivio.sqlite")
+            sqlite = try SQLiteArchive.install(Vault.seal(JSONEncoder().encode(next), key: key!), at: sqliteURL)
+            db = next
+        } else { try persist(next) }
+        completed = true; ready = true; error = ""; notice = "Backup ripristinato. Copia preventiva: \(rescue.path)"; if usesDailyGate { refreshDailyLock() }
     }
 
     func refreshDailyLock(now: Date = Date()) {

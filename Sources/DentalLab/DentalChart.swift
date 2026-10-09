@@ -47,7 +47,6 @@ struct DentalChart: View {
     @Binding var works: [ToothWork]
     @State private var selected: Set<Int> = []
     @State private var anchor: Int?
-    @State private var primary = false
     @State private var kind = "Corona in zirconia"
     @State private var system = "VITA classical A1–D4"
     @State private var shade = "A2"
@@ -56,12 +55,12 @@ struct DentalChart: View {
     @State private var issue = ""
     @State private var removing = false
     let readOnly: Bool
-    var upper: [Int] { primary ? DentalSelection.primaryUpper : DentalSelection.upper }
-    var lower: [Int] { primary ? DentalSelection.primaryLower : DentalSelection.lower }
+    var upper: [Int] { DentalSelection.upper }
+    var lower: [Int] { DentalSelection.lower }
     var body: some View {
         Surface { VStack(alignment: .leading, spacing: 14) {
-            SectionHeading(title: "Mappa dentale", subtitle: "Clic: un dente · Ctrl o ⌘: aggiungi/togli · Maiuscolo: intervallo nella stessa arcata.")
-            HStack { Toggle("Dentizione decidua", isOn: $primary).onChange(of: primary) { _ in selected = []; anchor = nil }; Spacer(); Text("Destra del paziente ← → Sinistra del paziente").font(.caption).foregroundColor(.secondary) }
+            SectionHeading(title: "Lavorazione e colore per dente", subtitle: "Scegli un dente, imposta lavorazione e colore, poi applica. Ctrl o ⌘ permette di selezionare più denti.")
+            HStack { Spacer(); Text("Destra del paziente ← → Sinistra del paziente").font(.caption).foregroundColor(.secondary) }
             GeometryReader { geometry in
                 let width = geometry.size.width
                 ZStack {
@@ -72,15 +71,16 @@ struct DentalChart: View {
             }.frame(height: 370)
             HStack { Circle().fill(Palette.teal).frame(width: 8,height: 8); Text("Selezionato"); Circle().fill(Color.orange).frame(width: 8,height: 8); Text("Lavorazione assegnata"); Spacer(); Text(selected.sorted().map(String.init).joined(separator: ", ")).fontWeight(.semibold) }.font(.caption)
             if !readOnly {
+                Text(selected.count == 1 ? "Dente \(selected.first!) · lavorazione e colore" : selected.isEmpty ? "Seleziona un dente nella mappa" : "Lavorazione e colore per \(selected.count) denti selezionati").font(.system(size: 14, weight: .semibold)).foregroundColor(Palette.ink)
                 HStack {
-                    Picker("Lavorazione", selection: $kind) { ForEach(["Corona in zirconia","Corona metallo-ceramica","Corona in disilicato","Ponte — pilastro","Ponte — elemento intermedio","Faccetta","Intarsio","Protesi mobile","Bite","Ortodonzia","Riparazione","Altro"], id: \.self) { Text($0).tag($0) } }
-                    Picker("Scala colore", selection: $system) { Text("VITA classical A1–D4").tag("VITA classical A1–D4"); Text("VITA 3D-MASTER").tag("VITA 3D-MASTER"); Text("Altra scala").tag("Altra scala") }
-                    if system == "VITA classical A1–D4" { Picker("Colore", selection: $shade) { ForEach(DentalSelection.shades, id: \.self) { Text($0).tag($0) } } }
+                    LabPicker("Lavorazione", selection: $kind) { ForEach(["Corona in zirconia","Corona metallo-ceramica","Corona in disilicato","Ponte — pilastro","Ponte — elemento intermedio","Faccetta","Intarsio","Protesi mobile","Bite","Ortodonzia","Riparazione","Altro"], id: \.self) { Text($0).tag($0) } }
+                    LabPicker("Scala colore", selection: $system) { Text("VITA classical A1–D4").tag("VITA classical A1–D4"); Text("VITA 3D-MASTER").tag("VITA 3D-MASTER"); Text("Altra scala").tag("Altra scala") }
+                    if system == "VITA classical A1–D4" { LabPicker("Colore", selection: $shade) { ForEach(DentalSelection.shades, id: \.self) { Text($0).tag($0) } } }
                     else { TextField("Codice colore", text: $customShade).textFieldStyle(.roundedBorder) }
                 }
                 if kind == "Altro" { Field(title: "Descrivi la lavorazione", text: $customKind) }
                 HStack {
-                    Button("Applica ai denti selezionati") { apply() }.buttonStyle(LabButtonStyle(primary: true)).disabled(selected.isEmpty)
+                    Button(selected.count == 1 ? "Applica al dente \(selected.first!)" : "Applica ai denti selezionati") { apply() }.buttonStyle(LabButtonStyle(primary: true)).disabled(selected.isEmpty)
                     Button("Rimuovi lavorazioni selezionate") { removing = true }.disabled(selected.isEmpty || !works.contains { selected.contains($0.tooth) })
                     Button("Deseleziona") { selected = []; anchor = nil }
                 }
@@ -89,7 +89,7 @@ struct DentalChart: View {
             }
             if !issue.isEmpty { Text(issue).font(.caption).foregroundColor(.red) }
             if !works.isEmpty { Divider(); ForEach(works.sorted { $0.tooth < $1.tooth }) { work in HStack { Text(String(work.tooth)).font(.system(size: 12,weight: .bold)).frame(width: 30); Text(work.kind).font(.caption); Spacer(); Text(work.shadeSystem + " · " + work.shade).font(.caption).foregroundColor(.secondary) } } }
-        } }.alert("Rimuovere le lavorazioni?", isPresented: $removing) { Button("Annulla", role: .cancel) {}; Button("Rimuovi", role: .destructive) { works.removeAll { selected.contains($0.tooth) } } } message: { Text("Verranno eliminate solo le assegnazioni dei denti selezionati, dopo il salvataggio della scheda.") }
+        } }.labAlert("Rimuovere le lavorazioni?", isPresented: $removing) { Button("Annulla", role: .cancel) { removing = false }; Button("Rimuovi", role: .destructive) { removing = false; works.removeAll { selected.contains($0.tooth) } } } message: { Text("Verranno eliminate solo le assegnazioni dei denti selezionati, dopo il salvataggio della scheda.") }
     }
     func arch(_ teeth: [Int], width: CGFloat, upperArch: Bool) -> some View {
         ForEach(Array(teeth.enumerated()), id: \.element) { index, tooth in

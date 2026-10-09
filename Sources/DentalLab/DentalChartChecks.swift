@@ -4,6 +4,7 @@ import AppKit
 struct DentalChartChecks {
     static func run() throws {
         try require(DentalSelection.valid.count == 52, "Elementi permanenti/decidui mancanti")
+        try require(DentalSelection.upper.count + DentalSelection.lower.count == 32, "Mappa permanente incompleta")
         let single = DentalSelection.click(11, selected: [18], anchor: nil, extend: false, range: false)
         try require(single == [11], "Selezione singola errata")
         let added = DentalSelection.click(21, selected: single, anchor: 11, extend: true, range: false)
@@ -17,6 +18,10 @@ struct DentalChartChecks {
         try require(result.count == 5 && result.first(where: { $0.tooth == 16 }) == old[0], "Modificato un dente non selezionato")
         let replaced = DentalSelection.apply(result, selected: [11,21], kind: "Faccetta", system: "VITA 3D-MASTER", shade: "2M2")
         try require(replaced.count == 5 && replaced.first(where: { $0.tooth == 11 })?.shade == "2M2", "Sostituzione o codice colore errati")
+        let independent = DentalSelection.apply(replaced, selected: [11], kind: "Intarsio", system: "VITA classical A1–D4", shade: "A2")
+        try require(independent.first(where: { $0.tooth == 11 })?.shade == "A2" && independent.first(where: { $0.tooth == 21 })?.shade == "2M2", "Colore di un dente modifica un altro elemento")
+        let legacy = ToothWork(tooth: 55, kind: "Riparazione", shadeSystem: "Altra scala", shade: "Originale")
+        try require(DentalSelection.apply(old + [legacy], selected: [11], kind: "Faccetta", system: "VITA classical A1–D4", shade: "A1").contains(legacy), "Assegnazione precedente decidua eliminata")
         var device = Device(); device.toothWorks = replaced
         let restored = try JSONDecoder().decode(Device.self, from: JSONEncoder().encode(device))
         try require(restored == device && restored.toothWorks?.count == 5, "Mappa non persistita")
