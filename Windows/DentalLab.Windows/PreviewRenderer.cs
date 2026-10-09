@@ -40,7 +40,8 @@ public static class PreviewRenderer
             var image = new RenderTargetBitmap(1440,1160,96,96,PixelFormats.Pbgra32); image.Render(content);
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using (var stream = File.Create(output)) encoder.Save(stream);
             var toothDialog = new ToothWorkDialog(11, new ToothRow { Dente = 11, Lavorazione = "Corona in zirconia", Scala = "VITA classical A1–D4", Colore = "A2" });
-            var toothContent = (FrameworkElement)toothDialog.Content; toothContent.Measure(new Size(480,490)); toothContent.Arrange(new Rect(0,0,480,490)); toothContent.UpdateLayout();
+            var toothPanel = (FrameworkElement)toothDialog.Content; toothDialog.Content = null;
+            var toothContent = new System.Windows.Controls.Border { Background = DesignSystem.Brush("Canvas"), Child = toothPanel }; toothContent.Measure(new Size(480,490)); toothContent.Arrange(new Rect(0,0,480,490)); toothContent.UpdateLayout();
             var toothImage = new RenderTargetBitmap(480,490,96,96,PixelFormats.Pbgra32); toothImage.Render(toothContent); var toothEncoder = new PngBitmapEncoder(); toothEncoder.Frames.Add(BitmapFrame.Create(toothImage));
             using (var stream = File.Create(Path.Combine(Path.GetDirectoryName(output)!, "DentalLab-Dente-preview.png"))) toothEncoder.Save(stream);
             toothDialog.Close();
