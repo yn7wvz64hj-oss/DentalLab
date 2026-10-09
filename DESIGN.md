@@ -25,3 +25,11 @@ Windows apre **Oggi · panoramica**: lavori aperti, consegne odierne, ritardi, f
 Mac aggiunge scorciatoie alla panoramica e filtri separati per fase e data nelle schermate Lavori e Scadenze. Il comando **Azzera filtri** ripristina anche anno, ricerca e visualizzazione degli attivi. Gli elenchi mostrano il riferimento al paziente insieme allo studio.
 
 La data di consegna è confrontata con il giorno locale, senza cambiare le date memorizzate. Il modello SQLite e il formato portabile non cambiano: non è necessaria una nuova migrazione. Otto verifiche sulla vera interfaccia WPF controllano filtri, archiviati, agenda, selezione, sezioni vuote e panoramica usando un archivio sintetico isolato.
+
+### Lavorazione e colore per ogni dente
+
+La mappa mostra solo le due arcate permanenti (32 elementi), senza la classificazione decidua. Su Windows il clic su un dente apre una finestra con lavorazione, scala e codice colore; il numero del dente è fisso. Si possono scegliere lavorazioni predefinite o inserirne una personalizzata. VITA classical offre i codici disponibili; le altre scale accettano un codice libero. Un dente già compilato apre i suoi valori per modificarli. Il riepilogo resta consultabile, con un comando dedicato di modifica.
+
+Su Mac il clic seleziona il dente e carica la sua assegnazione nei controlli sotto la mappa. **Applica al dente** aggiorna quel solo elemento; la selezione multipla rimane disponibile. In entrambi i sistemi occorre salvare la scheda per registrare le modifiche.
+
+Le vecchie assegnazioni decidue restano nei dati e nel riepilogo, nei documenti e nei backup: togliere le arcate dall'interfaccia non cancella informazioni già salvate. Le verifiche aggiuntive controllano la mappa permanente e l'indipendenza delle assegnazioni, insieme alla conservazione dei dati precedenti.

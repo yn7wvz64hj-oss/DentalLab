@@ -57,6 +57,29 @@ public sealed class ToothRow
     public string Colore { get; set; } = "A2";
 }
 
+public sealed class ToothWorkDialog : Window
+{
+    public ToothRow? Result { get; private set; }
+    public ToothWorkDialog(int tooth, ToothRow? existing)
+    {
+        Title = $"Dente {tooth} · lavorazione e colore"; Width = 480; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        var panel = new StackPanel { Margin = new Thickness(24) }; Content = panel;
+        panel.Children.Add(DesignSystem.Heading($"Dente {tooth}")); panel.Children.Add(DesignSystem.Caption("Scegli lavorazione e colore per questo dente. La scheda si registra con Salva scheda."));
+        var kind = new ComboBox { IsEditable = true, ItemsSource = new[]{"Corona in zirconia","Corona metallo-ceramica","Corona in disilicato","Ponte — pilastro","Ponte — elemento intermedio","Faccetta","Intarsio","Protesi mobile","Bite","Ortodonzia","Riparazione"}, Text = existing?.Lavorazione ?? "Corona in zirconia" };
+        var systems = new List<string> { "VITA classical A1–D4", "VITA 3D-MASTER", "Altra scala" }; if (existing != null && !systems.Contains(existing.Scala)) systems.Add(existing.Scala);
+        var scale = new ComboBox { ItemsSource = systems, SelectedItem = existing?.Scala ?? systems[0] };
+        var color = new ComboBox { IsEditable = true, Text = existing?.Colore ?? "A2" };
+        void Choices() { string text = color.Text; color.ItemsSource = (string)scale.SelectedItem == "VITA classical A1–D4" ? new[]{"A1","A2","A3","A3.5","A4","B1","B2","B3","B4","C1","C2","C3","C4","D2","D3","D4"} : Array.Empty<string>(); color.Text = text; }
+        scale.SelectionChanged += (_,_) => Choices(); Choices();
+        foreach (var field in new (string,UIElement)[]{("Lavorazione",kind),("Scala colore",scale),("Colore / codice",color)}) { panel.Children.Add(new TextBlock { Text = field.Item1, Margin = new Thickness(0,10,0,6) }); panel.Children.Add(field.Item2); }
+        var issue = new TextBlock { Foreground = Brushes.DarkRed, Margin = new Thickness(0,12,0,0) }; panel.Children.Add(issue);
+        var actions = new WrapPanel { Margin = new Thickness(0,16,0,0) }; panel.Children.Add(actions);
+        var apply = new Button { Content = $"Applica al dente {tooth}", Style = (Style)FindResource("PrimaryButton"), Margin = new Thickness(0,0,8,0) }; actions.Children.Add(apply);
+        apply.Click += (_,_) => { string work = kind.Text.Trim(), shade = color.Text.Trim(), system = (string)scale.SelectedItem; if (work.Length == 0 || shade.Length == 0 || (system == "VITA classical A1–D4" && !color.Items.Cast<string>().Contains(shade))) { issue.Text = "Inserisci lavorazione e un codice colore valido per la scala scelta."; return; } Result = new ToothRow { Dente = tooth, Lavorazione = work, Scala = system, Colore = shade }; DialogResult = true; };
+        var cancel = new Button { Content = "Annulla", IsCancel = true }; actions.Children.Add(cancel);
+    }
+}
+
 public sealed class MainWindow : Window
 {
     private readonly LocalArchive archive;
@@ -65,7 +88,7 @@ public sealed class MainWindow : Window
     private readonly TextBox search = new(), name = new(), patient = new(), detail = new() { AcceptsReturn = true, Height = 84, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly ComboBox client = new() { IsEditable = true, DisplayMemberPath = "Label" };
     private readonly DatePicker date = new();
-    private readonly DataGrid teeth = new() { Height = 155, AutoGenerateColumns = false, CanUserAddRows = false, EnableRowVirtualization = false };
+    private readonly DataGrid teeth = new() { Height = 155, IsReadOnly = true, AutoGenerateColumns = false, CanUserAddRows = false, EnableRowVirtualization = false };
     private readonly ListBox attachments = new() { Height = 95, DisplayMemberPath = "Label" };
     private readonly StackPanel editor = new();
     private readonly StackPanel overview = new();
@@ -124,13 +147,13 @@ public sealed class MainWindow : Window
         var left = new StackPanel { Margin = new Thickness(0,0,10,0) }; var right = new StackPanel { Margin = new Thickness(10,0,0,0) }; form.Children.Add(left); Grid.SetColumn(right,1); form.Children.Add(right);
         Field(left, "Titolo / nome", name); Field(right, "Studio · anagrafica Clienti", client); Field(left, "Paziente / codice", patient); Field(right, "Consegna / data", date); Field(left, "Stato", state); Field(info, "Note della lavorazione", detail); editor.Children.Add(DesignSystem.Card(info));
         state.ItemsSource = new[] { "Da iniziare", "In lavorazione", "In prova", "Pronto", "Consegnato", "Aperto", "Chiuso" };
-        var dental = new StackPanel(); dental.Children.Add(DesignSystem.Heading("Odontogramma")); dental.Children.Add(DesignSystem.Caption("Denti FDI permanenti e decidui · scegli un elemento e assegna lavorazione e colore."));
+        var dental = new StackPanel(); dental.Children.Add(DesignSystem.Heading("Lavorazione e colore per dente")); dental.Children.Add(DesignSystem.Caption("Clicca un dente per scegliere o modificare la sua lavorazione e il suo colore."));
         var chart = new StackPanel(); dental.Children.Add(chart);
-        foreach (var arch in new[] { new[]{18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28}, new[]{48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38}, new[]{55,54,53,52,51,61,62,63,64,65}, new[]{85,84,83,82,81,71,72,73,74,75} }) {
+        foreach (var arch in new[] { new[]{18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28}, new[]{48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38} }) {
             var row = new UniformGrid { Columns = arch.Length, Margin = new Thickness(0,0,0,4) }; chart.Children.Add(row);
-            foreach (int tooth in arch) { var tile = Button(row, tooth.ToString(), () => { if (current == null || ReadOnly()) return; if (toothRows.All(t => t.Dente != tooth)) { toothRows.Add(new ToothRow { Dente = tooth }); RefreshTeeth(); MarkDirty(); } }); tile.Style = (Style)FindResource("ToothButton"); tile.Padding = new Thickness(2,8,2,8); tile.Margin = new Thickness(2); tile.ToolTip = "Dente " + tooth; toothButtons[tooth] = tile; }
+            foreach (int tooth in arch) { var tile = Button(row, tooth.ToString(), () => EditTooth(tooth)); tile.Style = (Style)FindResource("ToothButton"); tile.Padding = new Thickness(2,8,2,8); tile.Margin = new Thickness(2); tile.ToolTip = "Dente " + tooth; toothButtons[tooth] = tile; }
         }
-        teeth.Margin = new Thickness(0,12,0,8); dental.Children.Add(teeth); Button(dental, "Rimuovi lavorazione del dente selezionato", () => { if (!ReadOnly() && teeth.SelectedItem is ToothRow selected) { toothRows.Remove(selected); RefreshTeeth(); MarkDirty(); } }); editor.Children.Add(DesignSystem.Card(dental));
+        teeth.Margin = new Thickness(0,12,0,8); dental.Children.Add(teeth); Button(dental, "Modifica lavorazione e colore", () => { if (teeth.SelectedItem is ToothRow selected) EditTooth(selected.Dente); }); Button(dental, "Rimuovi lavorazione del dente selezionato", () => { if (!ReadOnly() && teeth.SelectedItem is ToothRow selected) { toothRows.Remove(selected); RefreshTeeth(); MarkDirty(); } }); editor.Children.Add(DesignSystem.Card(dental));
         foreach (var column in new[] { ("Dente", nameof(ToothRow.Dente)), ("Lavorazione", nameof(ToothRow.Lavorazione)), ("Scala colore", nameof(ToothRow.Scala)), ("Colore", nameof(ToothRow.Colore)) }) teeth.Columns.Add(new DataGridTextColumn { Header = column.Item1, Binding = new Binding(column.Item2), Width = new DataGridLength(column.Item1 is "Dente" or "Colore" ? 0.5 : 1.5, DataGridLengthUnitType.Star) });
         var documents = new StackPanel(); documents.Children.Add(DesignSystem.Heading("Allegati e documenti")); documents.Children.Add(DesignSystem.Caption("Prescrizioni, foto e file del fascicolo, collegati alla scheda.")); documents.Children.Add(attachments);
         var fileButtons = new WrapPanel(); documents.Children.Add(fileButtons); Button(fileButtons, "Aggiungi allegato", Attach); Button(fileButtons, "Esporta allegato", ExportAttachment); Button(fileButtons, "Rimuovi riferimento", RemoveAttachment); editor.Children.Add(DesignSystem.Card(documents));
@@ -229,6 +252,7 @@ public sealed class MainWindow : Window
     // Called only by the isolated synthetic preview fixture; never on a user's archive.
     internal void VerifyWorkflow() {
         void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException("Workspace check: " + message); }
+        Require(toothButtons.Count == 32 && toothButtons.Keys.All(t => t < 50), "chart shows permanent teeth only");
         Navigate("Lavori", "In ritardo"); Require(list.Items.Count == 1 && name.Text == "Corona in zirconia", "overdue excludes delivered and archived cases");
         Navigate("Lavori", "Oggi"); Require(list.Items.Count == 1 && name.Text == "Ponte su tre elementi", "today excludes delivered cases");
         Navigate("Lavori", "Pronto"); Require(list.Items.Count == 1 && name.Text == "Faccette anteriori", "production stage excludes archived cases");
@@ -237,7 +261,7 @@ public sealed class MainWindow : Window
         Navigate("Clienti"); Require(list.Items.Count == 0 && current == null && !editor.IsEnabled, "empty section cannot edit stale records");
         Navigate("Panoramica"); Require(overview.Visibility == Visibility.Visible && editor.Visibility == Visibility.Collapsed && overview.Children.Count == 3, "overview switches workspace");
         Navigate("Lavori"); Require(list.Items.Count == 5 && current != null, "return to active cases");
-        Console.WriteLine("PASS · 8 workspace checks: dates, phases, archive, agenda, selection and overview.");
+        Console.WriteLine("PASS · 9 workspace checks: permanent teeth, dates, phases, archive, agenda, selection and overview.");
     }
     internal void ShowOverviewPreview() => Navigate("Panoramica");
     private bool ReadOnly() => current == null || current["issued"] != null || current["archived"]?.GetValue<bool>() == true || current["section"]?.GetValue<string>() is "Fatture" or "Magazzino";
@@ -253,7 +277,12 @@ public sealed class MainWindow : Window
         RefreshTeeth(); RefreshAttachments(); dirty = false; loading = false;
         foreach (var control in new Control[] { name, patient, detail, client, state, date, teeth }) control.IsEnabled = !ReadOnly();
     }
-    private void RefreshTeeth() { teeth.ItemsSource = null; teeth.ItemsSource = toothRows; foreach (var (tooth,tile) in toothButtons) { bool assigned = toothRows.Any(t => t.Dente == tooth); tile.Background = assigned ? DesignSystem.Brush("Pale") : Brushes.White; tile.BorderBrush = assigned ? DesignSystem.Brush("Accent") : DesignSystem.Brush("Line"); } }
+    private void RefreshTeeth() { teeth.ItemsSource = null; teeth.ItemsSource = toothRows; foreach (var (tooth,tile) in toothButtons) { var work = toothRows.FirstOrDefault(t => t.Dente == tooth); bool assigned = work != null; tile.Content = assigned ? $"{tooth}\n{work!.Colore}" : tooth.ToString(); tile.MinHeight = 48; tile.ToolTip = assigned ? $"Dente {tooth} · {work!.Lavorazione} · {work.Scala} {work.Colore}" : $"Dente {tooth} · scegli lavorazione e colore"; tile.Background = assigned ? DesignSystem.Brush("Pale") : Brushes.White; tile.BorderBrush = assigned ? DesignSystem.Brush("Accent") : DesignSystem.Brush("Line"); } }
+    private void EditTooth(int tooth) {
+        if (ReadOnly()) return;
+        var dialog = new ToothWorkDialog(tooth, toothRows.FirstOrDefault(t => t.Dente == tooth)) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.Result is ToothRow result) { toothRows.RemoveAll(t => t.Dente == tooth); toothRows.Add(result); RefreshTeeth(); teeth.SelectedItem = result; MarkDirty(); }
+    }
     private void RefreshAttachments() => attachments.ItemsSource = (current?["files"]?.AsArray() ?? new JsonArray()).Select(f => new Row(f!["id"]!.GetValue<string>(), f["name"]!.GetValue<string>())).ToList();
     private void New()
     {
