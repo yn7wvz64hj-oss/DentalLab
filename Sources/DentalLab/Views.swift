@@ -16,11 +16,11 @@ struct WorkspaceBackdrop: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [.white, Palette.canvas], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Canvas { context, size in
-                var lines = Path()
-                for x in stride(from: CGFloat(0), through: size.width, by: 64) { lines.move(to: CGPoint(x: x, y: 0)); lines.addLine(to: CGPoint(x: x, y: size.height)) }
-                for y in stride(from: CGFloat(0), through: size.height, by: 64) { lines.move(to: CGPoint(x: 0, y: y)); lines.addLine(to: CGPoint(x: size.width, y: y)) }
-                context.stroke(lines, with: .color(Palette.line.opacity(0.25)), lineWidth: 0.5)
+            GeometryReader { geometry in
+                Path { lines in
+                    for x in stride(from: CGFloat(0), through: geometry.size.width, by: 64) { lines.move(to: CGPoint(x: x, y: 0)); lines.addLine(to: CGPoint(x: x, y: geometry.size.height)) }
+                    for y in stride(from: CGFloat(0), through: geometry.size.height, by: 64) { lines.move(to: CGPoint(x: 0, y: y)); lines.addLine(to: CGPoint(x: geometry.size.width, y: y)) }
+                }.stroke(Palette.line.opacity(0.25), lineWidth: 0.5)
             }.accessibilityHidden(true)
         }.allowsHitTesting(false)
     }
