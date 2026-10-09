@@ -5,7 +5,9 @@ import PDFKit
 
 struct SelfTests {
     static func run() throws {
+        print("CHECK · backup portabile e SQLite")
         try BackupChecks.run()
+        print("CHECK · moduli e persistenza esistenti")
         try DentalChartChecks.run()
         var deadlineWork = Entry(section: "Lavori"); deadlineWork.name = "Nome clinico da non inviare"; deadlineWork.patient = "Paziente riservato"
         deadlineWork.date = ISO8601DateFormatter().date(from: "2026-03-29T12:00:00Z")!

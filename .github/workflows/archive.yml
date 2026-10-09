@@ -36,10 +36,15 @@ jobs:
           name: windows-fixture
           path: fixtures/in
       - run: bash compila.sh
-      - run: DentalLab.app/Contents/MacOS/DentalLab --self-test
+      - run: |
+          if ! DentalLab.app/Contents/MacOS/DentalLab --self-test; then
+            lldb --batch -o run -o 'thread backtrace all' -- DentalLab.app/Contents/MacOS/DentalLab --self-test
+            exit 1
+          fi
         env:
           DENTALLAB_FIXTURE_INPUT: fixtures/in
           DENTALLAB_FIXTURE_OUTPUT: fixtures/out
+          SWIFT_BACKTRACE: 'enable=yes,demangle=yes,interactive=no'
       - uses: actions/upload-artifact@v4
         with:
           name: swift-fixture
