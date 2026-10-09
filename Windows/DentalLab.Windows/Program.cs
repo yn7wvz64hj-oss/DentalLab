@@ -109,7 +109,7 @@ public sealed class MainWindow : Window
     public MainWindow(LocalArchive archive, bool preview = false)
     {
         this.archive = archive; Title = "DentalLab · laboratorio digitale"; Width = 1480; Height = 960; MinWidth = 1280; MinHeight = 760;
-        var root = new Grid { Background = DesignSystem.Brush("Canvas") }; Content = root;
+        var root = new Grid { Background = DesignSystem.WorkspaceBrush() }; Content = root;
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(216) }); root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(270) }); root.ColumnDefinitions.Add(new ColumnDefinition());
         var sideBorder = new Border { Background = DesignSystem.Brush("Sidebar"), BorderBrush = new SolidColorBrush(Color.FromRgb(43,85,103)), BorderThickness = new Thickness(0,0,1,0), Padding = new Thickness(20,30,20,22) }; root.Children.Add(sideBorder);
         var sidebar = new DockPanel(); sideBorder.Child = sidebar;
@@ -119,9 +119,9 @@ public sealed class MainWindow : Window
         local.Child = new TextBlock { Text = "●  ARCHIVIO LOCALE\nCifrato su questo computer", Foreground = Brushes.LightCyan, FontSize = 11, LineHeight = 20 };
         DockPanel.SetDock(local,Dock.Bottom); sidebar.Children.Add(local);
         var dock = new DockPanel { Margin = new Thickness(24,22,24,18) }; Grid.SetColumn(dock,2); root.Children.Add(dock);
-        var heading = new DockPanel { Margin = new Thickness(0,0,0,20) }; DockPanel.SetDock(heading,Dock.Top); dock.Children.Add(heading);
+        var heading = new DockPanel { Margin = new Thickness(18) }; var headerShell = new Border { Child = heading, Background = DesignSystem.Brush("Sidebar"), CornerRadius = new CornerRadius(18), BorderBrush = DesignSystem.Brush("Accent"), BorderThickness = new Thickness(1), Margin = new Thickness(0,0,0,20) }; DockPanel.SetDock(headerShell,Dock.Top); dock.Children.Add(headerShell); workspaceTitle.Foreground = Brushes.White;
         var tag = new Border { Background = DesignSystem.Brush("Pale"), CornerRadius = new CornerRadius(18), Padding = new Thickness(12,7,12,7), VerticalAlignment = VerticalAlignment.Top, Child = new TextBlock { Text = "●  Laboratorio digitale", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Accent") } }; DockPanel.SetDock(tag,Dock.Right); heading.Children.Add(tag);
-        var titles = new StackPanel(); heading.Children.Add(titles); titles.Children.Add(new TextBlock { Text = "LABORATORIO  /  GESTIONE", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,0,0,6) }); titles.Children.Add(workspaceTitle); titles.Children.Add(new TextBlock { Text = "Ogni dettaglio, in un unico spazio.", FontSize = 13, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,7,0,0) });
+        var titles = new StackPanel(); heading.Children.Add(titles); titles.Children.Add(new TextBlock { Text = "LABORATORIO  /  GESTIONE", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Cyan"), Margin = new Thickness(0,0,0,6) }); titles.Children.Add(workspaceTitle); titles.Children.Add(new TextBlock { Text = "Ogni dettaglio, in un unico spazio.", FontSize = 13, Foreground = Brushes.LightSteelBlue, Margin = new Thickness(0,7,0,0) });
         var toolbar = new WrapPanel { Margin = new Thickness(0,0,0,16) }; DockPanel.SetDock(toolbar, Dock.Top); dock.Children.Add(toolbar);
         Button(toolbar, "Nuovo lavoro", () => { if (Navigate("Lavori")) New(); }); saveAction = Button(toolbar, "Salva scheda", Save); Button(toolbar, "Studi e contatti", () => Navigate("Clienti"));
         var security = Button(toolbar, "Archivio e sicurezza", () => {}); var securityMenu = new ContextMenu(); security.ContextMenu = securityMenu;

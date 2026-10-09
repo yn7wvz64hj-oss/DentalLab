@@ -6,11 +6,11 @@ struct Palette {
     static let cyan = Color(red: 0.30, green: 0.88, blue: 0.96)
     static let violet = Color(red: 0.39, green: 0.43, blue: 0.77)
     static let navy = Color(red: 0.045, green: 0.075, blue: 0.14)
-    static let canvas = Color(red: 0.95, green: 0.965, blue: 0.985)
+    static let canvas = Color(red: 0.90, green: 0.945, blue: 0.985)
     static let ink = Color(red: 0.10, green: 0.15, blue: 0.23)
     static let line = Color(red: 0.84, green: 0.89, blue: 0.94)
     static let sidebar = LinearGradient(colors: [navy, Color(red: 0.08, green: 0.16, blue: 0.25)], startPoint: .topLeading, endPoint: .bottomTrailing)
-    static let action = LinearGradient(colors: [teal, Color(red: 0.08, green: 0.32, blue: 0.50)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let action = LinearGradient(colors: [Color(red: 0.22, green: 0.26, blue: 0.58), teal], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 struct WorkspaceBackdrop: View {
     var body: some View {
@@ -20,7 +20,7 @@ struct WorkspaceBackdrop: View {
                 Path { lines in
                     for x in stride(from: CGFloat(0), through: geometry.size.width, by: 64) { lines.move(to: CGPoint(x: x, y: 0)); lines.addLine(to: CGPoint(x: x, y: geometry.size.height)) }
                     for y in stride(from: CGFloat(0), through: geometry.size.height, by: 64) { lines.move(to: CGPoint(x: 0, y: y)); lines.addLine(to: CGPoint(x: geometry.size.width, y: y)) }
-                }.stroke(Palette.line.opacity(0.25), lineWidth: 0.5)
+                }.stroke(Palette.teal.opacity(0.09), lineWidth: 0.5)
             }.accessibilityHidden(true)
         }.allowsHitTesting(false)
     }
@@ -36,14 +36,14 @@ struct LabButtonStyle: ButtonStyle {
             .background { if primary { Palette.action } else { (subtle ? Color.clear : Color.white) } }
             .cornerRadius(10)
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(primary ? Palette.cyan.opacity(0.25) : subtle ? .clear : Palette.line))
-            .shadow(color: primary ? Palette.teal.opacity(0.16) : .clear, radius: 6, y: 3)
+            .shadow(color: primary ? Palette.teal.opacity(0.28) : .clear, radius: 9, y: 4)
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
     }
 }
 struct Surface<Content: View>: View {
     let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
-    var body: some View { content.padding(22).background(Color.white).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(LinearGradient(colors: [Palette.line, Palette.line.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)).shadow(color: Palette.navy.opacity(0.035), radius: 14, y: 5) }
+    var body: some View { content.padding(22).padding(.top, 8).background(LinearGradient(colors: [Color.white.opacity(0.98), Color.white.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing)).cornerRadius(20).overlay(RoundedRectangle(cornerRadius: 20).stroke(LinearGradient(colors: [Palette.cyan.opacity(0.55), Palette.line], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)).overlay(alignment: .topLeading) { Capsule().fill(LinearGradient(colors: [Palette.cyan, Palette.violet], startPoint: .leading, endPoint: .trailing)).frame(width: 76, height: 3).padding(.leading, 22).padding(.top, 12) }.shadow(color: Palette.teal.opacity(0.10), radius: 20, y: 7) }
 }
 struct Badge: View {
     var text: String
@@ -139,7 +139,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             HStack { Text("LABORATORIO").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundColor(.secondary); Text("/").foregroundColor(Palette.line); Text(section).font(.system(size: 12, weight: .medium)); Spacer(); Badge(text: "Archivio locale", color: Palette.teal); Button { backup = true } label: { Label("Backup USB", systemImage: "externaldrive") }.buttonStyle(LabButtonStyle()) }.padding(.horizontal, 30).frame(height: 68).background(Color.white.opacity(0.95)).overlay(alignment: .bottom) { Rectangle().fill(Palette.line.opacity(0.6)).frame(height: 1) }
             ScrollView { VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top) { VStack(alignment: .leading, spacing: 7) { Text(section == "Panoramica" ? "Il laboratorio, oggi." : section).font(.system(size: 29, weight: .semibold)).foregroundColor(Palette.ink); Text(moduleSubtitle(section)).font(.system(size: 12)).foregroundColor(.secondary) }; Spacer(); if !["Panoramica", "Attività", "Impostazioni"].contains(section) { Button { editing = store.create(section == "Scadenze" ? "Lavori" : section) } label: { Label(section == "Lavori" ? "Nuovo lavoro" : "Nuova scheda", systemImage: "plus").padding(.vertical, 5) }.buttonStyle(LabButtonStyle(primary: true)) } }
+                HStack(alignment: .top) { VStack(alignment: .leading, spacing: 7) { Text(section == "Panoramica" ? "Il laboratorio, oggi." : section).font(.system(size: 29, weight: .semibold, design: .rounded)).foregroundColor(.white); Text(moduleSubtitle(section)).font(.system(size: 12)).foregroundColor(.white.opacity(0.75)) }; Spacer(); if !["Panoramica", "Attività", "Impostazioni"].contains(section) { Button { editing = store.create(section == "Scadenze" ? "Lavori" : section) } label: { Label(section == "Lavori" ? "Nuovo lavoro" : "Nuova scheda", systemImage: "plus").padding(.vertical, 5) }.buttonStyle(LabButtonStyle(primary: true)) } }.padding(20).background(Palette.sidebar).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Palette.cyan.opacity(0.4), lineWidth: 1))
                 if !store.notice.isEmpty { HStack { Image(systemName: "info.circle"); Text(store.notice).font(.system(size: 11)); Spacer(); Button { store.notice = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain) }.foregroundColor(Palette.teal).padding(12).background(Palette.teal.opacity(0.06)).cornerRadius(10) }
                 if section == "Panoramica" { dashboard }
                 else if section == "Impostazioni" { SettingsView().environmentObject(store) }

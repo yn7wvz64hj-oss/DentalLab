@@ -10,10 +10,19 @@ public static class DesignSystem
 {
     public static void Install(Application app) => app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/DentalLab;component/Theme.xaml", UriKind.Relative) });
     public static Brush Brush(string key) => (Brush)Application.Current.FindResource(key);
-    public static Border Card(UIElement content) => new() {
-        Background = Brushes.White, CornerRadius = new CornerRadius(16), BorderBrush = Brush("Line"), BorderThickness = new Thickness(1), Padding = new Thickness(22), Margin = new Thickness(0,0,0,16), Child = content,
-        Effect = new DropShadowEffect { Color = Color.FromRgb(12,28,48), Opacity = 0.045, BlurRadius = 18, ShadowDepth = 4 }
-    };
+    public static Border Card(UIElement content) {
+        var panel = new StackPanel();
+        panel.Children.Add(new Rectangle { Height = 3, Width = 76, HorizontalAlignment = HorizontalAlignment.Left, RadiusX = 2, RadiusY = 2, Fill = new LinearGradientBrush(Color.FromRgb(45,211,229), Color.FromRgb(111,107,222),0), Margin = new Thickness(0,0,0,14), IsHitTestVisible = false });
+        panel.Children.Add(content);
+        return new Border { Background = new LinearGradientBrush(Color.FromArgb(250,255,255,255), Color.FromArgb(245,242,249,255),90), CornerRadius = new CornerRadius(20), BorderBrush = new LinearGradientBrush(Color.FromRgb(147,210,229), Color.FromRgb(208,218,240),45), BorderThickness = new Thickness(1), Padding = new Thickness(22), Margin = new Thickness(0,0,0,18), Child = panel,
+            Effect = new DropShadowEffect { Color = Color.FromRgb(39,84,125), Opacity = 0.12, BlurRadius = 24, ShadowDepth = 7 } };
+    }
+    public static Brush WorkspaceBrush() {
+        var group = new DrawingGroup();
+        group.Children.Add(new GeometryDrawing(new SolidColorBrush(Color.FromRgb(231,240,250)),null,new RectangleGeometry(new Rect(0,0,56,56))));
+        group.Children.Add(new GeometryDrawing(null,new Pen(new SolidColorBrush(Color.FromArgb(30,70,142,171)),0.5),Geometry.Parse("M 0,56 L 0,0 L 56,0")));
+        var brush = new DrawingBrush(group) { TileMode = TileMode.Tile, Viewport = new Rect(0,0,56,56), ViewportUnits = BrushMappingMode.Absolute, Stretch = Stretch.None }; brush.Freeze(); return brush;
+    }
     public static TextBlock Heading(string title, string? caption = null) => new() { Text = title, FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0,0,0,caption == null ? 16 : 8) };
     public static TextBlock Caption(string text) => new() { Text = text, FontSize = 12, Foreground = Brush("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,12) };
     public static UIElement Brand()

@@ -33,3 +33,7 @@ La mappa mostra solo le due arcate permanenti (32 elementi), senza la classifica
 Su Mac il clic seleziona il dente e carica la sua assegnazione nei controlli sotto la mappa. **Applica al dente** aggiorna quel solo elemento; la selezione multipla rimane disponibile. In entrambi i sistemi occorre salvare la scheda per registrare le modifiche.
 
 Le vecchie assegnazioni decidue restano nei dati e nel riepilogo, nei documenti e nei backup: togliere le arcate dall'interfaccia non cancella informazioni già salvate. Le verifiche aggiuntive controllano la mappa permanente e l'indipendenza delle assegnazioni, insieme alla conservazione dei dati precedenti.
+
+### Direzione visiva futuristica
+
+La testata della schermata usa blu notte e testo chiaro. I pannelli hanno un effetto vetro chiaro ottenuto con gradienti e trasparenza, bordi ciano e una piccola linea ciano/viola. I pulsanti principali sfumano dall'indaco al petrolio; il fondo mostra una griglia tecnica tenue. Il contrasto rimane alto nei campi e nei dati, senza animazioni continue. Il fondo viene disegnato con geometrie vettoriali native, evitando dipendenze da effetti Metal sul Mac e mantenendo invisibili alle interazioni le decorazioni.
