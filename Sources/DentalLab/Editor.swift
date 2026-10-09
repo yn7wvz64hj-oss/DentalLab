@@ -37,7 +37,7 @@ struct Editor: View {
                 if tab == "Righe" { LinesEditor(lines: lines, listino: store.entries.filter { $0.section == "Listino" && !$0.isArchived }, readOnly: readOnly); totals }
                 if tab == "Allegati" { attachmentView }
                 if tab == "Incassi" { paymentsView }
-            }.padding(24) }.background(Palette.canvas)
+            }.padding(24) }.background { WorkspaceBackdrop() }
             Divider()
             HStack { Button("Chiudi") { dismiss() }.keyboardShortcut(.cancelAction); Button { Documents.exportPDF(entry, db: store.db, store: store) } label: { Label("PDF", systemImage: "arrow.down.doc") }; if entry.section == "Fatture" && entry.issued != nil { Button("XML…") { Documents.exportXML(entry, store: store) } }; Spacer(); if documentSections.contains(entry.section) && !readOnly { Button("Registra documento…") { registering = true } }; if !readOnly { Button("Salva bozza") { if store.save(entry) { dismiss() } }.buttonStyle(LabButtonStyle(primary: true)).keyboardShortcut(.defaultAction) } }.padding(20).background(Color.white)
         }.buttonStyle(LabButtonStyle()).frame(width: min(990, (NSScreen.main?.visibleFrame.width ?? 1100) - 60), height: min(770, (NSScreen.main?.visibleFrame.height ?? 850) - 70)).tint(Palette.teal)

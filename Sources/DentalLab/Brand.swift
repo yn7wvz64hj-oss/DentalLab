@@ -18,5 +18,5 @@ struct ToothMark: Shape {
     }
 }
 struct BrandMark: View {
-    var body: some View { ToothMark().fill(LinearGradient(colors: [Color(red: 0.66, green: 0.96, blue: 0.87), Palette.teal], startPoint: .topLeading, endPoint: .bottomTrailing)) }
+    var body: some View { ToothMark().fill(LinearGradient(colors: [Color(red: 0.76, green: 0.98, blue: 1), Palette.cyan, Palette.teal], startPoint: .topLeading, endPoint: .bottomTrailing)) }
 }

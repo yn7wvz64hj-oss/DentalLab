@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Media;
 
 namespace DentalLab.Windows;
@@ -14,6 +16,7 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--preview") { PreviewRenderer.Run(args[1]); return; }
         // Global per-machine mutex across Windows sessions; archive also has a file lock.
         using var instance = new Mutex(false, @"Global\DentalLab.LocalArchive"); bool owns = false;
         try {
@@ -23,7 +26,7 @@ public static class Program
             // A separate local folder enables recovery when the original key/archive is damaged.
             if (args.Length == 2 && args[0] == "--archive") folder = Path.GetFullPath(args[1]);
             using var archive = new LocalArchive(folder);
-            var app = new Application(); app.Run(new MainWindow(archive));
+            var app = new Application(); DesignSystem.Install(app); app.Run(new MainWindow(archive));
         } catch (Exception e) { MessageBox.Show("Avvio non riuscito. I dati esistenti sono conservati.\n" + e.Message + "\nPer recuperare usa un backup portabile e una nuova cartella locale: DentalLab.exe --archive C:\\Percorso\\Recupero", "DentalLab"); }
         finally { if (owns) instance.ReleaseMutex(); }
     }
@@ -37,9 +40,10 @@ public sealed class PasswordDialog : Window
     {
         Title = title; Width = 420; SizeToContent = SizeToContent.Height; WindowStartupLocation = WindowStartupLocation.CenterOwner; ResizeMode = ResizeMode.NoResize;
         var panel = new StackPanel { Margin = new Thickness(24) }; Content = panel;
-        panel.Children.Add(new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,12) }); panel.Children.Add(password);
+        panel.Children.Add(new TextBlock { Text = "D E N T A L L A B", Foreground = DesignSystem.Brush("Accent"), FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0,0,0,18) });
+        panel.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,18) }); panel.Children.Add(password);
         if (repeat) { panel.Children.Add(new TextBlock { Text = "Ripeti la password", Margin = new Thickness(0,12,0,4) }); panel.Children.Add(confirmation); }
-        var button = new Button { Content = "Continua", Margin = new Thickness(0,16,0,0), Padding = new Thickness(10), IsDefault = true };
+        var button = new Button { Content = "Continua", Style = (Style)FindResource("PrimaryButton"), Margin = new Thickness(0,20,0,0), Padding = new Thickness(12), IsDefault = true };
         button.Click += (_, _) => { if (repeat && Password != confirmation.Password) { MessageBox.Show("Le password non coincidono."); return; } DialogResult = true; };
         panel.Children.Add(button); Loaded += (_, _) => password.Focus();
     }
@@ -56,14 +60,16 @@ public sealed class ToothRow
 public sealed class MainWindow : Window
 {
     private readonly LocalArchive archive;
-    private readonly ComboBox section = new() { Width = 155 }, state = new() { Width = 190, IsEditable = true };
+    private readonly ComboBox section = new(), state = new() { IsEditable = true };
     private readonly ListBox list = new() { MinWidth = 240, DisplayMemberPath = "Label" };
-    private readonly TextBox search = new() { Width = 170 }, name = new(), patient = new(), detail = new() { AcceptsReturn = true, Height = 120, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private readonly TextBox search = new(), name = new(), patient = new(), detail = new() { AcceptsReturn = true, Height = 84, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly ComboBox client = new() { IsEditable = true, DisplayMemberPath = "Label" };
     private readonly DatePicker date = new();
-    private readonly DataGrid teeth = new() { Height = 190, AutoGenerateColumns = true, CanUserAddRows = false };
+    private readonly DataGrid teeth = new() { Height = 155, AutoGenerateColumns = false, CanUserAddRows = false, EnableRowVirtualization = false };
     private readonly ListBox attachments = new() { Height = 95, DisplayMemberPath = "Label" };
-    private readonly StackPanel editor = new() { Margin = new Thickness(20) };
+    private readonly StackPanel editor = new();
+    private readonly Dictionary<int,Button> toothButtons = [];
+    private readonly TextBlock workspaceTitle = new() { Text = "Lavori", FontSize = 30, FontWeight = FontWeights.SemiBold };
     private JsonObject? current;
     private bool unlocked, dirty, loading;
     private int failed;
@@ -72,44 +78,60 @@ public sealed class MainWindow : Window
     private const string Classical = "VITA classical A1–D4";
     private static readonly HashSet<string> Shades = ["A1","A2","A3","A3.5","A4","B1","B2","B3","B4","C1","C2","C3","C4","D2","D3","D4"];
     private sealed record Row(string ID, string Label);
-    public MainWindow(LocalArchive archive)
+    public MainWindow(LocalArchive archive, bool preview = false)
     {
-        this.archive = archive; Title = "DentalLab · archivio locale"; Width = 1150; Height = 880; MinWidth = 950;
-        Background = Brushes.White; FontSize = 14;
-        var dock = new DockPanel { Margin = new Thickness(14) }; Content = dock;
-        var toolbar = new WrapPanel { Margin = new Thickness(0,0,0,12) }; DockPanel.SetDock(toolbar, Dock.Top); dock.Children.Add(toolbar);
+        this.archive = archive; Title = "DentalLab · laboratorio digitale"; Width = 1320; Height = 960; MinWidth = 1100; MinHeight = 760;
+        var root = new Grid { Background = DesignSystem.Brush("Canvas") }; Content = root;
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) }); root.ColumnDefinitions.Add(new ColumnDefinition());
+        var sideBorder = new Border { Background = DesignSystem.Brush("Sidebar"), BorderBrush = new SolidColorBrush(Color.FromRgb(43,85,103)), BorderThickness = new Thickness(0,0,1,0), Padding = new Thickness(20,30,20,22) }; root.Children.Add(sideBorder);
+        var sidebar = new DockPanel(); sideBorder.Child = sidebar;
+        var sideTop = new StackPanel(); DockPanel.SetDock(sideTop,Dock.Top); sidebar.Children.Add(sideTop); sideTop.Children.Add(DesignSystem.Brand());
+        sideTop.Children.Add(new TextBlock { Text = "IL TUO ARCHIVIO", Foreground = Brushes.LightSteelBlue, FontSize = 10, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0,0,0,10) });
+        var local = new Border { CornerRadius = new CornerRadius(10), BorderBrush = new SolidColorBrush(Color.FromRgb(43,85,103)), BorderThickness = new Thickness(1), Padding = new Thickness(12), Margin = new Thickness(0,18,0,0) };
+        local.Child = new TextBlock { Text = "●  ARCHIVIO LOCALE\nCifrato su questo computer", Foreground = Brushes.LightCyan, FontSize = 11, LineHeight = 20 };
+        DockPanel.SetDock(local,Dock.Bottom); sidebar.Children.Add(local);
+        var dock = new DockPanel { Margin = new Thickness(28,22,28,18) }; Grid.SetColumn(dock,1); root.Children.Add(dock);
+        var heading = new DockPanel { Margin = new Thickness(0,0,0,20) }; DockPanel.SetDock(heading,Dock.Top); dock.Children.Add(heading);
+        var tag = new Border { Background = DesignSystem.Brush("Pale"), CornerRadius = new CornerRadius(18), Padding = new Thickness(12,7,12,7), VerticalAlignment = VerticalAlignment.Top, Child = new TextBlock { Text = "●  Laboratorio digitale", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Accent") } }; DockPanel.SetDock(tag,Dock.Right); heading.Children.Add(tag);
+        var titles = new StackPanel(); heading.Children.Add(titles); titles.Children.Add(new TextBlock { Text = "LABORATORIO  /  GESTIONE", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,0,0,6) }); titles.Children.Add(workspaceTitle); titles.Children.Add(new TextBlock { Text = "Ogni dettaglio, in un unico spazio.", FontSize = 13, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,7,0,0) });
+        var toolbar = new WrapPanel { Margin = new Thickness(0,0,0,16) }; DockPanel.SetDock(toolbar, Dock.Top); dock.Children.Add(toolbar);
         Button(toolbar, "Backup USB", Export); Button(toolbar, "Verifica backup", Verify); Button(toolbar, "Ripristina", Restore); Button(toolbar, "Impostazioni", Profile); Button(toolbar, "Cambia password", ChangePassword); Button(toolbar, "Blocca", Lock);
-        var footer = new TextBlock { Text = "Un computer alla volta: esporta e verifica sulla USB, chiudi DentalLab, poi ripristina sull’altro computer.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,12,0,0) }; DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer);
-        var sidebar = new StackPanel { Width = 260 }; DockPanel.SetDock(sidebar, Dock.Left); dock.Children.Add(sidebar);
+        var footer = new TextBlock { Text = "Un computer alla volta: esporta e verifica sulla USB, chiudi DentalLab, poi ripristina sull’altro computer.", TextWrapping = TextWrapping.Wrap, Foreground = DesignSystem.Brush("Muted"), FontSize = 11, Margin = new Thickness(0,12,0,0) }; DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer);
         section.ItemsSource = new[] { "Lavori", "Pazienti", "Clienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza" }; section.SelectedIndex = 0;
-        sidebar.Children.Add(section); sidebar.Children.Add(new TextBlock { Text = "Cerca titolo, paziente o studio", Margin = new Thickness(0,12,0,4) }); sidebar.Children.Add(search);
-        Button(sidebar, "Nuova scheda", New); sidebar.Children.Add(list); list.Height = 590;
+        sideTop.Children.Add(section); sideTop.Children.Add(new TextBlock { Text = "Cerca titolo, paziente o studio", Foreground = Brushes.LightSteelBlue, FontSize = 11, Margin = new Thickness(0,18,0,8) }); sideTop.Children.Add(search);
+        Button(sideTop, "Nuova scheda", New).Margin = new Thickness(0,14,0,18);
+        var listCard = new Border { CornerRadius = new CornerRadius(12), Background = Brushes.White, Padding = new Thickness(4), Child = list }; sidebar.Children.Add(listCard);
         dock.Children.Add(new ScrollViewer { Content = editor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-        Field(editor, "Titolo / nome", name); Field(editor, "Studio (anagrafica Clienti)", client); Field(editor, "Paziente / codice", patient); Field(editor, "Consegna / data", date); Field(editor, "Stato", state); Field(editor, "Note", detail);
+        var info = new StackPanel(); info.Children.Add(DesignSystem.Heading("Informazioni principali"));
+        var form = new Grid(); form.ColumnDefinitions.Add(new ColumnDefinition()); form.ColumnDefinitions.Add(new ColumnDefinition()); info.Children.Add(form);
+        var left = new StackPanel { Margin = new Thickness(0,0,10,0) }; var right = new StackPanel { Margin = new Thickness(10,0,0,0) }; form.Children.Add(left); Grid.SetColumn(right,1); form.Children.Add(right);
+        Field(left, "Titolo / nome", name); Field(right, "Studio · anagrafica Clienti", client); Field(left, "Paziente / codice", patient); Field(right, "Consegna / data", date); Field(left, "Stato", state); Field(info, "Note della lavorazione", detail); editor.Children.Add(DesignSystem.Card(info));
         state.ItemsSource = new[] { "Da iniziare", "In lavorazione", "In prova", "Pronto", "Consegnato", "Aperto", "Chiuso" };
-        editor.Children.Add(new TextBlock { Text = "Odontogramma · denti FDI permanenti e decidui", Margin = new Thickness(0,14,0,8) });
-        var chart = new WrapPanel(); editor.Children.Add(chart);
+        var dental = new StackPanel(); dental.Children.Add(DesignSystem.Heading("Odontogramma")); dental.Children.Add(DesignSystem.Caption("Denti FDI permanenti e decidui · scegli un elemento e assegna lavorazione e colore."));
+        var chart = new StackPanel(); dental.Children.Add(chart);
         foreach (var arch in new[] { new[]{18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28}, new[]{48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38}, new[]{55,54,53,52,51,61,62,63,64,65}, new[]{85,84,83,82,81,71,72,73,74,75} }) {
-            var row = new WrapPanel { Width = 700 }; chart.Children.Add(row);
-            foreach (int tooth in arch) Button(row, tooth.ToString(), () => { if (current == null || ReadOnly()) return; if (toothRows.All(t => t.Dente != tooth)) { toothRows.Add(new ToothRow { Dente = tooth }); RefreshTeeth(); MarkDirty(); } });
+            var row = new UniformGrid { Columns = arch.Length, Margin = new Thickness(0,0,0,4) }; chart.Children.Add(row);
+            foreach (int tooth in arch) { var tile = Button(row, tooth.ToString(), () => { if (current == null || ReadOnly()) return; if (toothRows.All(t => t.Dente != tooth)) { toothRows.Add(new ToothRow { Dente = tooth }); RefreshTeeth(); MarkDirty(); } }); tile.Style = (Style)FindResource("ToothButton"); tile.Padding = new Thickness(2,8,2,8); tile.Margin = new Thickness(2); tile.ToolTip = "Dente " + tooth; toothButtons[tooth] = tile; }
         }
-        editor.Children.Add(teeth); Button(editor, "Rimuovi lavorazione del dente selezionato", () => { if (!ReadOnly() && teeth.SelectedItem is ToothRow selected) { toothRows.Remove(selected); RefreshTeeth(); MarkDirty(); } });
-        editor.Children.Add(new TextBlock { Text = "Allegati · prescrizioni, documenti, foto", Margin = new Thickness(0,14,0,4) }); editor.Children.Add(attachments);
-        var fileButtons = new WrapPanel(); editor.Children.Add(fileButtons); Button(fileButtons, "Aggiungi allegato", Attach); Button(fileButtons, "Esporta allegato", ExportAttachment); Button(fileButtons, "Rimuovi riferimento", RemoveAttachment);
-        Button(editor, "Contatti dello studio", EditContact); Button(editor, "Salva scheda", Save); Button(editor, "Mostra scheda completa", ShowFullRecord);
+        teeth.Margin = new Thickness(0,12,0,8); dental.Children.Add(teeth); Button(dental, "Rimuovi lavorazione del dente selezionato", () => { if (!ReadOnly() && teeth.SelectedItem is ToothRow selected) { toothRows.Remove(selected); RefreshTeeth(); MarkDirty(); } }); editor.Children.Add(DesignSystem.Card(dental));
+        foreach (var column in new[] { ("Dente", nameof(ToothRow.Dente)), ("Lavorazione", nameof(ToothRow.Lavorazione)), ("Scala colore", nameof(ToothRow.Scala)), ("Colore", nameof(ToothRow.Colore)) }) teeth.Columns.Add(new DataGridTextColumn { Header = column.Item1, Binding = new Binding(column.Item2), Width = new DataGridLength(column.Item1 is "Dente" or "Colore" ? 0.5 : 1.5, DataGridLengthUnitType.Star) });
+        var documents = new StackPanel(); documents.Children.Add(DesignSystem.Heading("Allegati e documenti")); documents.Children.Add(DesignSystem.Caption("Prescrizioni, foto e file del fascicolo, collegati alla scheda.")); documents.Children.Add(attachments);
+        var fileButtons = new WrapPanel(); documents.Children.Add(fileButtons); Button(fileButtons, "Aggiungi allegato", Attach); Button(fileButtons, "Esporta allegato", ExportAttachment); Button(fileButtons, "Rimuovi riferimento", RemoveAttachment); editor.Children.Add(DesignSystem.Card(documents));
+        var actions = new WrapPanel(); editor.Children.Add(actions); Button(actions, "Salva scheda", Save); Button(actions, "Contatti dello studio", EditContact); Button(actions, "Mostra scheda completa", ShowFullRecord);
         var limitation = new TextBlock { Text = "Documenti registrati e schede archiviate sono in sola lettura. Numerazione fiscale, XML/PDF, magazzino e calendario avanzati si gestiscono sul Mac.", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray }; editor.Children.Add(limitation);
-        section.SelectionChanged += (_, _) => { if (unlocked && CanDiscard()) RefreshList(); }; search.TextChanged += (_, _) => { if (unlocked && CanDiscard()) RefreshList(); };
+        section.SelectionChanged += (_, _) => { workspaceTitle.Text = (string)section.SelectedItem; if (unlocked && CanDiscard()) RefreshList(); }; search.TextChanged += (_, _) => { if (unlocked && CanDiscard()) RefreshList(); };
         list.SelectionChanged += (_, _) => { if (unlocked && list.SelectedItem is Row row && CanDiscard()) Load(row.ID); };
         foreach (var box in new[] { name, patient, detail }) box.TextChanged += (_, _) => MarkDirty();
-        client.SelectionChanged += (_, _) => MarkDirty(); client.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => MarkDirty())); state.SelectionChanged += (_, _) => MarkDirty(); state.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => MarkDirty())); date.SelectedDateChanged += (_, _) => MarkDirty();
+        client.SelectionChanged += (_, _) => MarkDirty(); client.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource is TextBox input && input.IsKeyboardFocusWithin) MarkDirty(); })); state.SelectionChanged += (_, _) => MarkDirty(); state.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource is TextBox input && input.IsKeyboardFocusWithin) MarkDirty(); })); date.SelectedDateChanged += (_, _) => MarkDirty();
         teeth.CellEditEnding += (_, _) => MarkDirty();
-        Closing += (_, e) => { if (!CanDiscard()) e.Cancel = true; };
-        Loaded += (_, _) => { try { if (!Access()) Close(); else { RefreshList(); if (list.Items.Count > 0) list.SelectedIndex = 0; } } catch (Exception e) { MessageBox.Show(e.Message); Close(); } };
+        if (!preview) Closing += (_, e) => { if (!CanDiscard()) e.Cancel = true; };
+        if (preview) { unlocked = true; RefreshList(); if (list.Items.Count > 0) { list.SelectedIndex = 0; Load(((Row)list.Items[0]).ID); } }
+        else Loaded += (_, _) => { try { if (!Access()) Close(); else { RefreshList(); if (list.Items.Count > 0) list.SelectedIndex = 0; } } catch (Exception e) { MessageBox.Show(e.Message); Close(); } };
     }
     private void MarkDirty() { if (!loading && current != null && !ReadOnly()) dirty = true; }
     private bool CanDiscard() => !dirty || MessageBox.Show("Scartare le modifiche non salvate?", "DentalLab", MessageBoxButton.YesNo) == MessageBoxResult.Yes;
-    private static void Field(Panel panel, string label, UIElement field) { panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0,10,0,4) }); panel.Children.Add(field); }
-    private void Button(Panel panel, string label, Action action) { var b = new Button { Content = label, Margin = new Thickness(3), Padding = new Thickness(8,5,8,5) }; b.Click += (_, _) => { try { if (label != "Blocca" && !unlocked) { if (!Access()) return; RefreshList(); } action(); } catch (Exception e) { MessageBox.Show(e.Message, "Operazione non completata"); } }; panel.Children.Add(b); }
+    private static void Field(Panel panel, string label, UIElement field) { panel.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = DesignSystem.Brush("Muted"), Margin = new Thickness(0,9,0,7) }); panel.Children.Add(field); }
+    private Button Button(Panel panel, string label, Action action) { var b = new Button { Content = label, Margin = new Thickness(0,0,7,7) }; if (label is "Salva scheda" or "Nuova scheda" or "Continua") b.Style = (Style)FindResource("PrimaryButton"); b.Click += (_, _) => { try { if (label != "Blocca" && !unlocked) { if (!Access()) return; RefreshList(); } action(); } catch (Exception e) { MessageBox.Show(e.Message, "Operazione non completata"); } }; panel.Children.Add(b); return b; }
     private string? Password(string title, bool repeat = false) { var dialog = new PasswordDialog(title, repeat) { Owner = this }; return dialog.ShowDialog() == true ? dialog.Password : null; }
     private bool Access()
     {
@@ -158,7 +180,7 @@ public sealed class MainWindow : Window
         RefreshTeeth(); RefreshAttachments(); dirty = false; loading = false;
         foreach (var control in new Control[] { name, patient, detail, client, state, date, teeth }) control.IsEnabled = !ReadOnly();
     }
-    private void RefreshTeeth() { teeth.ItemsSource = null; teeth.ItemsSource = toothRows; }
+    private void RefreshTeeth() { teeth.ItemsSource = null; teeth.ItemsSource = toothRows; foreach (var (tooth,tile) in toothButtons) { bool assigned = toothRows.Any(t => t.Dente == tooth); tile.Background = assigned ? DesignSystem.Brush("Pale") : Brushes.White; tile.BorderBrush = assigned ? DesignSystem.Brush("Accent") : DesignSystem.Brush("Line"); } }
     private void RefreshAttachments() => attachments.ItemsSource = (current?["files"]?.AsArray() ?? new JsonArray()).Select(f => new Row(f!["id"]!.GetValue<string>(), f["name"]!.GetValue<string>())).ToList();
     private void New()
     {
@@ -189,7 +211,7 @@ public sealed class MainWindow : Window
         if (index < 0) entries.Add(e); else entries[index] = e;
         LocalArchive.Audit(next, "Salvataggio Windows", e["id"]!.GetValue<string>()); archive.Save(next); string id = e["id"]!.GetValue<string>(); dirty = false; RefreshList(); Load(id);
     }
-    private static JsonObject NewDevice()
+    internal static JsonObject NewDevice()
     {
         var d = new JsonObject();
         foreach (string key in new[]{"identifier","prescriber","institution","prescription","teeth","shade","intendedUse","design","manufacturing","performance","risks","requirements","exceptions","instructions","checks","reviewer"}) d[key] = "";

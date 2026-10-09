@@ -2,35 +2,53 @@ import SwiftUI
 import AppKit
 
 struct Palette {
-    static let teal = Color(red: 0.08, green: 0.46, blue: 0.46)
-    static let navy = Color(red: 0.07, green: 0.13, blue: 0.20)
-    static let canvas = Color(red: 0.95, green: 0.965, blue: 0.974)
-    static let ink = Color(red: 0.13, green: 0.20, blue: 0.27)
-    static let line = Color(red: 0.88, green: 0.91, blue: 0.93)
+    static let teal = Color(red: 0.02, green: 0.43, blue: 0.56)
+    static let cyan = Color(red: 0.30, green: 0.88, blue: 0.96)
+    static let violet = Color(red: 0.39, green: 0.43, blue: 0.77)
+    static let navy = Color(red: 0.045, green: 0.075, blue: 0.14)
+    static let canvas = Color(red: 0.95, green: 0.965, blue: 0.985)
+    static let ink = Color(red: 0.10, green: 0.15, blue: 0.23)
+    static let line = Color(red: 0.84, green: 0.89, blue: 0.94)
+    static let sidebar = LinearGradient(colors: [navy, Color(red: 0.08, green: 0.16, blue: 0.25)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let action = LinearGradient(colors: [teal, Color(red: 0.08, green: 0.32, blue: 0.50)], startPoint: .topLeading, endPoint: .bottomTrailing)
+}
+struct WorkspaceBackdrop: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [.white, Palette.canvas], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Canvas { context, size in
+                var lines = Path()
+                for x in stride(from: CGFloat(0), through: size.width, by: 64) { lines.move(to: CGPoint(x: x, y: 0)); lines.addLine(to: CGPoint(x: x, y: size.height)) }
+                for y in stride(from: CGFloat(0), through: size.height, by: 64) { lines.move(to: CGPoint(x: 0, y: y)); lines.addLine(to: CGPoint(x: size.width, y: y)) }
+                context.stroke(lines, with: .color(Palette.line.opacity(0.25)), lineWidth: 0.5)
+            }.accessibilityHidden(true)
+        }.allowsHitTesting(false)
+    }
 }
 struct LabButtonStyle: ButtonStyle {
     var primary = false
     var subtle = false
     @Environment(\.isEnabled) var enabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 12, weight: .medium)).labelStyle(.titleAndIcon)
+        configuration.label.font(.system(size: 12, weight: .semibold)).labelStyle(.titleAndIcon)
             .foregroundColor(primary ? .white : Palette.teal)
             .padding(.horizontal, subtle ? 0 : 14).padding(.vertical, subtle ? 3 : 9)
-            .background(primary ? Palette.teal : subtle ? Color.clear : Color.white)
-            .cornerRadius(8)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(primary || subtle ? .clear : Palette.line))
+            .background { if primary { Palette.action } else { (subtle ? Color.clear : Color.white) } }
+            .cornerRadius(10)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(primary ? Palette.cyan.opacity(0.25) : subtle ? .clear : Palette.line))
+            .shadow(color: primary ? Palette.teal.opacity(0.16) : .clear, radius: 6, y: 3)
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
     }
 }
 struct Surface<Content: View>: View {
     let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
-    var body: some View { content.padding(20).background(Color.white).cornerRadius(16).overlay(RoundedRectangle(cornerRadius: 16).stroke(Palette.line, lineWidth: 1)) }
+    var body: some View { content.padding(22).background(Color.white).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(LinearGradient(colors: [Palette.line, Palette.line.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)).shadow(color: Palette.navy.opacity(0.035), radius: 14, y: 5) }
 }
 struct Badge: View {
     var text: String
     var color: Color = Palette.teal
-    var body: some View { Text(text).font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).padding(.vertical, 5).foregroundColor(color).background(color.opacity(0.09)).clipShape(Capsule()) }
+    var body: some View { Text(text).font(.system(size: 11, weight: .semibold)).padding(.horizontal, 11).padding(.vertical, 6).foregroundColor(color).background(color.opacity(0.08)).clipShape(Capsule()).overlay(Capsule().stroke(color.opacity(0.16), lineWidth: 0.7)) }
 }
 struct SectionHeading: View {
     var title: String; var subtitle: String = ""
@@ -66,7 +84,7 @@ struct ContentView: View {
         ZStack {
             if store.ready && !store.locked { HStack(spacing: 0) { sidebar; main } }
             if store.locked || !store.ready {
-                Palette.canvas.ignoresSafeArea()
+                WorkspaceBackdrop().ignoresSafeArea()
                 if store.ready { AccessScreen(store: store) }
                 else { VStack(spacing: 20) { Text("Archivio non disponibile").font(.title.bold()); Text(store.error).multilineTextAlignment(.center).frame(maxWidth: 520); Button("Ripristina backup…") { backup = true } } }
 
@@ -82,27 +100,36 @@ struct ContentView: View {
     }
     var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) { BrandMark().frame(width: 32, height: 38); VStack(alignment: .leading, spacing: 2) { Text("DentalLab").font(.system(size: 21, weight: .semibold)); Text("LABORATORIO DIGITALE").font(.system(size: 8, weight: .medium)).tracking(1.8).opacity(0.5) } }.padding(.horizontal, 22).padding(.top, 38).padding(.bottom, 30)
+            HStack(spacing: 12) { BrandMark().frame(width: 36, height: 44).shadow(color: Palette.cyan.opacity(0.3), radius: 12); VStack(alignment: .leading, spacing: 5) { Text("DentalLab").font(.system(size: 23, weight: .semibold, design: .rounded)); Text("LABORATORIO DIGITALE").font(.system(size: 8, weight: .semibold)).tracking(1.7).foregroundColor(Palette.cyan.opacity(0.85)) } }.padding(.horizontal, 22).padding(.top, 38).padding(.bottom, 28)
             ScrollView { VStack(alignment: .leading, spacing: 4) {
                 navGroup("IL TUO SPAZIO", ["Panoramica", "Lavori", "Scadenze"])
-                navGroup("RELAZIONI", ["Clienti", "Listino"])
+                navGroup("RELAZIONI", ["Pazienti", "Clienti", "Listino"])
                 navGroup("AMMINISTRAZIONE", ["Preventivi", "Consegne", "Fatture", "Magazzino"])
                 navGroup("DOCUMENTAZIONE", ["Conformità", "Qualità", "Sorveglianza"])
                 navGroup("ARCHIVIO", ["Attività", "Impostazioni"])
             }.padding(.horizontal, 12) }
             Divider().overlay(Color.white.opacity(0.1)).padding(.horizontal, 20)
             HStack(spacing: 10) { Circle().fill(Palette.teal).frame(width: 32, height: 32).overlay(Text("DL").font(.system(size: 11, weight: .bold))); VStack(alignment: .leading) { Text(store.db.profile.name.isEmpty ? "Il tuo laboratorio" : store.db.profile.name).font(.system(size: 11, weight: .medium)).lineLimit(1); Text("Archivio locale cifrato").font(.system(size: 9)).opacity(0.5) }; Spacer(); Button { store.lock() } label: { Image(systemName: "lock").foregroundColor(.white.opacity(0.6)) }.buttonStyle(.plain).help("Blocca archivio") }.padding(20)
-        }.foregroundColor(.white).frame(width: 232).background(Palette.navy)
+        }.foregroundColor(.white).frame(width: 248).background(Palette.sidebar).overlay(alignment: .trailing) { Rectangle().fill(Palette.cyan.opacity(0.18)).frame(width: 1) }
     }
     func navGroup(_ title: String, _ items: [String]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 8, weight: .semibold)).tracking(1.3).foregroundColor(.white.opacity(0.35)).padding(.leading, 12).padding(.top, 17).padding(.bottom, 5)
-            ForEach(items, id: \.self) { item in Button { section = item } label: { HStack(spacing: 11) { Image(systemName: moduleIcon(item)).font(.system(size: 13)).frame(width: 18); Text(item).font(.system(size: 12, weight: section == item ? .semibold : .regular)); Spacer(); if item == "Lavori" && !openWorks.isEmpty { Text("\(openWorks.count)").font(.system(size: 10)).padding(.horizontal, 6).padding(.vertical, 2).background(Color.white.opacity(0.1)).cornerRadius(4) } }.foregroundColor(section == item ? .white : .white.opacity(0.62)).padding(.horizontal, 12).padding(.vertical, 10).background(section == item ? Color.white.opacity(0.10) : .clear).cornerRadius(8) }.buttonStyle(.plain) }
+            Text(title).font(.system(size: 8, weight: .semibold)).tracking(1.4).foregroundColor(.white.opacity(0.55)).padding(.leading, 14).padding(.top, 17).padding(.bottom, 5)
+            ForEach(items, id: \.self) { item in Button { section = item } label: {
+                HStack(spacing: 11) {
+                    Image(systemName: moduleIcon(item)).font(.system(size: 14)).frame(width: 18).foregroundColor(section == item ? Palette.cyan : .white.opacity(0.72))
+                    Text(item).font(.system(size: 12, weight: section == item ? .semibold : .regular)); Spacer()
+                    if item == "Lavori" && !openWorks.isEmpty { Text("\(openWorks.count)").font(.system(size: 10, weight: .semibold)).padding(.horizontal, 7).padding(.vertical, 3).background(Palette.cyan.opacity(0.12)).cornerRadius(6) }
+                }.foregroundColor(section == item ? .white : .white.opacity(0.76)).padding(.horizontal, 14).padding(.vertical, 11)
+                    .background(section == item ? Palette.cyan.opacity(0.10) : .clear).cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(section == item ? Palette.cyan.opacity(0.25) : .clear))
+                    .overlay(alignment: .leading) { if section == item { Capsule().fill(Palette.cyan).frame(width: 3, height: 18).padding(.leading, 3) } }
+            }.buttonStyle(.plain) }
         }
     }
     var main: some View {
         VStack(spacing: 0) {
-            HStack { Text("WORKSPACE").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundColor(.secondary); Text("/").foregroundColor(.secondary); Text(section).font(.system(size: 11, weight: .medium)); Spacer(); Badge(text: "Solo su questo Mac", color: .gray); Button { backup = true } label: { Label("Backup", systemImage: "externaldrive") }.buttonStyle(LabButtonStyle(subtle: true)) }.padding(.horizontal, 30).frame(height: 62).background(Color.white)
+            HStack { Text("LABORATORIO").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundColor(.secondary); Text("/").foregroundColor(Palette.line); Text(section).font(.system(size: 12, weight: .medium)); Spacer(); Badge(text: "Archivio locale", color: Palette.teal); Button { backup = true } label: { Label("Backup USB", systemImage: "externaldrive") }.buttonStyle(LabButtonStyle()) }.padding(.horizontal, 30).frame(height: 68).background(Color.white.opacity(0.95)).overlay(alignment: .bottom) { Rectangle().fill(Palette.line.opacity(0.6)).frame(height: 1) }
             ScrollView { VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top) { VStack(alignment: .leading, spacing: 7) { Text(section == "Panoramica" ? "Il laboratorio, oggi." : section).font(.system(size: 29, weight: .semibold)).foregroundColor(Palette.ink); Text(moduleSubtitle(section)).font(.system(size: 12)).foregroundColor(.secondary) }; Spacer(); if !["Panoramica", "Attività", "Impostazioni"].contains(section) { Button { editing = store.create(section == "Scadenze" ? "Lavori" : section) } label: { Label(section == "Lavori" ? "Nuovo lavoro" : "Nuova scheda", systemImage: "plus").padding(.vertical, 5) }.buttonStyle(LabButtonStyle(primary: true)) } }
                 if !store.notice.isEmpty { HStack { Image(systemName: "info.circle"); Text(store.notice).font(.system(size: 11)); Spacer(); Button { store.notice = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain) }.foregroundColor(Palette.teal).padding(12).background(Palette.teal.opacity(0.06)).cornerRadius(10) }
@@ -111,7 +138,7 @@ struct ContentView: View {
                 else if section == "Attività" { auditView }
                 else { records }
             }.padding(30).frame(maxWidth: .infinity, alignment: .leading) }
-        }.background(Palette.canvas)
+        }.background { WorkspaceBackdrop() }
     }
     var dashboard: some View {
         VStack(alignment: .leading, spacing: 24) {

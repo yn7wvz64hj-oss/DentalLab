@@ -42,14 +42,15 @@ struct AccessScreen: View {
     @State private var issue = ""
     var body: some View {
         VStack(spacing: 20) {
-            BrandMark().frame(width: 70, height: 80)
+            BrandMark().frame(width: 70, height: 80).shadow(color: Palette.teal.opacity(0.12), radius: 14)
+            Text("DENTALLAB · ACCESSO LOCALE").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Palette.teal)
             Text(store.needsPasswordSetup ? "Proteggi DentalLab" : "Bentornato in laboratorio").font(.title.bold())
             Text(store.needsPasswordSetup ? "Scegli una password: verrà richiesta al primo avvio di ogni giornata." : "Inserisci la password per aprire l’archivio. Dopo questo accesso puoi riaprire l’app durante la giornata.").font(.system(size: 13)).foregroundColor(.secondary).multilineTextAlignment(.center)
             SecureField("Password", text: $password).textFieldStyle(.roundedBorder).onSubmit { submit() }
             if store.needsPasswordSetup { SecureField("Ripeti la password", text: $confirmation).textFieldStyle(.roundedBorder).onSubmit { submit() }; Text("Almeno 10 caratteri. Conserva la password: non è recuperabile dall’app.").font(.caption).foregroundColor(.secondary) }
             if !issue.isEmpty { Text(issue).font(.caption).foregroundColor(.red) }
             Button(store.needsPasswordSetup ? "Imposta password e apri" : "Apri archivio") { submit() }.buttonStyle(LabButtonStyle(primary: true))
-        }.frame(width: 380).padding(36).background(Color.white).cornerRadius(22)
+        }.frame(width: 380).padding(36).background(Color.white).cornerRadius(24).overlay(RoundedRectangle(cornerRadius: 24).stroke(Palette.line)).shadow(color: Palette.navy.opacity(0.08), radius: 28, y: 12)
     }
     func submit() {
         do {

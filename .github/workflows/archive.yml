@@ -14,6 +14,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - run: dotnet build Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release
+      - run: dotnet Windows/DentalLab.Windows/bin/Release/net8.0-windows/DentalLab.dll --preview previews/windows.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-design-preview
+          path: previews/windows.png
       - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
         env:
           DENTALLAB_FIXTURE_OUTPUT: fixtures
@@ -36,6 +41,13 @@ jobs:
           name: windows-fixture
           path: fixtures/in
       - run: bash compila.sh
+      - run: |
+          mkdir -p previews
+          DentalLab.app/Contents/MacOS/DentalLab --preview "$PWD/previews/macos.png"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-design-preview
+          path: previews/macos.png
       - run: |
           if ! DentalLab.app/Contents/MacOS/DentalLab --self-test; then
             lldb --batch -o run -o 'thread backtrace all' -- DentalLab.app/Contents/MacOS/DentalLab --self-test
