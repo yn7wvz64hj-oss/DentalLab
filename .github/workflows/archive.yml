@@ -2,7 +2,7 @@ name: Archive and desktop compatibility
 on:
   pull_request:
   push:
-    branches: [main, 'feat/portable-local-archive']
+    branches: [main]
 permissions:
   contents: read
 jobs:

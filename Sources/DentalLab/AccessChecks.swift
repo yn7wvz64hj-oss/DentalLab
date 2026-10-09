@@ -4,6 +4,7 @@ import CryptoKit
 struct AccessChecks {
     static func run(folder: URL, key: SymmetricKey) throws {
         let store = Store(folder: folder, testKey: key)
+        try require(store.ready, store.error)
         let now = Date()
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now)!
         store.refreshDailyLock(now: now)
@@ -30,8 +31,10 @@ struct AccessChecks {
         do { try store.unlockWithPassword("Password-prova-123") } catch { rejected = true }
         try require(rejected && store.locked, "Vecchia password ancora accettata")
         try store.unlockWithPassword("Nuova-password-456")
-        let disk = try JSONDecoder().decode(Database.self, from: Vault.open(Data(contentsOf: folder.appendingPathComponent("archivio.dlvault")), key: key))
-        try require(try disk.dailyAccess!.accepts("Nuova-password-456"), "Password non persistita")
+        let sqlite = try SQLiteArchive(url: folder.appendingPathComponent("archivio.sqlite"), create: false)
+        let disk = try JSONDecoder().decode(Database.self, from: Vault.open(sqlite.read(), key: key))
+        guard let access = disk.dailyAccess else { throw AppIssue(message: "Password non persistita in SQLite") }
+        try require(try access.accepts("Nuova-password-456"), "Password non persistita")
         var january = Entry(section: "Lavori"); january.date = ISO8601DateFormatter().date(from: "2026-12-31T23:30:00Z")!
         var previous = january; previous.id = UUID(); previous.archived = true; previous.date = ISO8601DateFormatter().date(from: "2025-06-01T12:00:00Z")!
         try require(WorkYear.of(january) == 2027 && WorkYear.available([january, previous, Entry(section: "Clienti")]) == [2027, 2025], "Suddivisione anni o fuso italiano errati")
