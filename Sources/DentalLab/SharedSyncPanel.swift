@@ -4,7 +4,10 @@ import AppKit
 struct SharedSyncPanel: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) var dismiss
-    @State private var path = "", password = "", issue = "", confirming = false
+    @State private var path = ""
+    @State private var password = ""
+    @State private var issue = ""
+    @State private var confirming = false
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Label("DISCO CONDIVISO · VPN", systemImage: "externaldrive.connected.to.line.below").font(.caption).foregroundColor(Palette.teal)

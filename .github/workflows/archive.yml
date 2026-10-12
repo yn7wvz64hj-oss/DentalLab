@@ -27,6 +27,7 @@ jobs:
           name: windows-fixture
           path: fixtures
       - run: dotnet publish Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release -r win-x64 --self-contained true -o dist/windows
+      - run: Copy-Item ARCHIVIO-PORTABILE.md,DESIGN.md,SINCRONIZZAZIONE-VPN.md -Destination dist/windows
       - uses: actions/upload-artifact@v4
         with:
           name: DentalLab-Windows-x64
