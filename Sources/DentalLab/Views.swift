@@ -62,6 +62,7 @@ func moduleIcon(_ s: String) -> String { switch s { case "Panoramica": return "s
 func moduleSubtitle(_ s: String) -> String { switch s { case "Panoramica": return "Una visione chiara del tuo laboratorio."; case "Lavori": return "Dalla prescrizione alla consegna, un fascicolo per ogni lavoro."; case "Scadenze": return "Le consegne in ordine di priorità."; case "Clienti": return "Studi, prescrittori e dati di fatturazione."; case "Pazienti": return "Identificativi e riferimenti essenziali."; case "Listino": return "Lavorazioni e prezzi del tuo laboratorio."; case "Preventivi": return "Proposte con righe, sconti e imposte."; case "Consegne": return "Documenti collegati ai lavori."; case "Fatture": return "Documenti, incassi e preparazione XML."; case "Magazzino": return "Materiali, lotti, scadenze e movimenti."; case "Conformità": return "Dichiarazioni e fascicoli dei dispositivi su misura."; case "Qualità": return "Non conformità, controlli e azioni correttive."; case "Sorveglianza": return "Reclami, esperienza post-produzione e vigilanza."; case "Attività": return "Cronologia delle operazioni salvate nell’archivio."; default: return "Laboratorio, sicurezza e copie di recupero." } }
 
 struct ContentView: View {
+    @State private var sharedPanel = false
     @EnvironmentObject var store: Store
     @State var section = "Panoramica"
     @State var search = ""
@@ -101,9 +102,11 @@ struct ContentView: View {
         .sheet(item: $editing) { e in Editor(entry: e).environmentObject(store) }
         .sheet(item: $movement) { e in MovementEditor(stockEntry: e).environmentObject(store) }
         .sheet(isPresented: $backup) { BackupView().environmentObject(store) }
+        .sheet(isPresented: $sharedPanel) { SharedSyncPanel().environmentObject(store) }
+        .onAppear { if !store.locked && store.sharedRequired && store.sharedSession == nil { sharedPanel = true } }
         .labAlert("Archiviare questa scheda?", isPresented: Binding(get: { archiving != nil }, set: { if !$0 { archiving = nil } })) { Button("Annulla", role: .cancel) { archiving = nil }; Button("Archivia") { if let e = archiving { store.archive(e) }; archiving = nil } } message: { Text("La scheda rimane nell’archivio e nel backup. I documenti registrati mantengono numero e contenuto.") }
         .labAlert("Operazione non completata", isPresented: Binding(get: { !store.error.isEmpty && store.ready }, set: { if !$0 { store.error = "" } })) { Button("OK") { store.error = "" } } message: { Text(store.error) }
-        .onChange(of: store.locked) { locked in if locked { editing = nil; movement = nil; archiving = nil; backup = false; search = "" } }
+        .onChange(of: store.locked) { locked in if !locked && store.sharedRequired && store.sharedSession == nil { sharedPanel = true }; if locked { editing = nil; movement = nil; archiving = nil; backup = false; search = "" } }
         .onChange(of: section) { _ in search = ""; filter = "Attivi" }
     }
     var sidebar: some View {

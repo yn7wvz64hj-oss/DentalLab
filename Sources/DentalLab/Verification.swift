@@ -7,6 +7,7 @@ struct SelfTests {
     static func run() throws {
         print("CHECK · backup portabile e SQLite")
         try BackupChecks.run()
+        try SharedArchiveChecks.run()
         print("CHECK · moduli e persistenza esistenti")
         try DentalChartChecks.run()
         var deadlineWork = Entry(section: "Lavori"); deadlineWork.name = "Nome clinico da non inviare"; deadlineWork.patient = "Paziente riservato"

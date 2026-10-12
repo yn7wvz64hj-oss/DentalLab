@@ -83,6 +83,8 @@ public sealed class ToothWorkDialog : Window
 public sealed class MainWindow : Window
 {
     private readonly LocalArchive archive;
+    private SharedArchiveSession? sharedSession;
+    private string SharedConfig => Path.Combine(archive.Folder, "sync-folder.txt");
     private readonly ComboBox section = new(), state = new() { IsEditable = true };
     private readonly ListBox list = new() { MinWidth = 240, DisplayMemberPath = "Label" };
     private readonly TextBox search = new(), name = new(), patient = new(), detail = new() { AcceptsReturn = true, Height = 84, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -125,7 +127,7 @@ public sealed class MainWindow : Window
         var toolbar = new WrapPanel { Margin = new Thickness(0,0,0,16) }; DockPanel.SetDock(toolbar, Dock.Top); dock.Children.Add(toolbar);
         Button(toolbar, "Nuovo lavoro", () => { if (Navigate("Lavori")) New(); }); saveAction = Button(toolbar, "Salva scheda", Save); Button(toolbar, "Studi e contatti", () => Navigate("Clienti"));
         var security = Button(toolbar, "Archivio e sicurezza", () => {}); var securityMenu = new ContextMenu(); security.ContextMenu = securityMenu;
-        foreach (var action in new (string,Action)[] { ("Esporta backup USB", Export), ("Verifica integrità backup", Verify), ("Ripristina backup", Restore), ("Identità laboratorio", Profile), ("Cambia password", ChangePassword), ("Blocca archivio", Lock) }) { var item = new MenuItem { Header = action.Item1 }; item.Click += (_, _) => Perform(action.Item2); securityMenu.Items.Add(item); }
+        foreach (var action in new (string,Action)[] { ("Sincronizzazione su disco VPN", ConfigureShared), ("Esporta backup USB", Export), ("Verifica integrità backup", Verify), ("Ripristina backup", Restore), ("Identità laboratorio", Profile), ("Cambia password", ChangePassword), ("Blocca archivio", Lock) }) { var item = new MenuItem { Header = action.Item1 }; item.Click += (_, _) => Perform(action.Item2); securityMenu.Items.Add(item); }
         security.Click += (_, _) => { securityMenu.PlacementTarget = security; securityMenu.IsOpen = true; };
         var footer = new TextBlock { Text = "Un computer alla volta: esporta e verifica sulla USB, chiudi DentalLab, poi ripristina sull’altro computer.", TextWrapping = TextWrapping.Wrap, Foreground = DesignSystem.Brush("Muted"), FontSize = 11, Margin = new Thickness(0,12,0,0) }; DockPanel.SetDock(footer, Dock.Bottom); dock.Children.Add(footer);
         section.ItemsSource = new[] { "Panoramica", "Lavori", "Scadenze", "Pazienti", "Clienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza" }; section.SelectedItem = preview ? "Lavori" : "Panoramica";
@@ -165,9 +167,12 @@ public sealed class MainWindow : Window
         foreach (var box in new[] { name, patient, detail }) box.TextChanged += (_, _) => MarkDirty();
         client.SelectionChanged += (_, _) => MarkDirty(); client.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource is TextBox input && input.IsKeyboardFocusWithin) MarkDirty(); })); state.SelectionChanged += (_, _) => MarkDirty(); state.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource is TextBox input && input.IsKeyboardFocusWithin) MarkDirty(); })); date.SelectedDateChanged += (_, _) => MarkDirty();
         teeth.CellEditEnding += (_, _) => MarkDirty();
-        if (!preview) Closing += (_, e) => { if (!CanDiscard()) e.Cancel = true; };
+        if (!preview) Closing += (_, e) => {
+            if (!CanDiscard()) { e.Cancel = true; return; }
+            if (sharedSession != null) { try { sharedSession.Finish(); sharedSession = null; } catch (Exception issue) { e.Cancel = true; NoticeDialog.Show("Chiusura annullata: " + issue.Message + "\nLe modifiche salvate restano sul computer. Ricollega la VPN e riprova.", "Sincronizzazione non completata"); } }
+        };
         if (preview) { unlocked = true; RefreshList(); if (list.Items.Count > 0) { list.SelectedIndex = 0; Load(((Row)list.Items[0]).ID); } }
-        else Loaded += (_, _) => { try { if (!Access()) Close(); else { RefreshList(); if (list.Items.Count > 0) list.SelectedIndex = 0; } } catch (Exception e) { NoticeDialog.Show(e.Message); Close(); } };
+        else Loaded += (_, _) => { try { if (!Access()) Close(); else { if (File.Exists(SharedConfig)) { string? secret = Password("Password dell’archivio condiviso sul disco VPN"); if (secret == null) { Close(); return; } ConnectShared(File.ReadAllText(SharedConfig), secret, false); } RefreshList(); if (list.Items.Count > 0) list.SelectedIndex = 0; } } catch (Exception e) { NoticeDialog.Show(e.Message); Close(); } };
     }
     private void MarkDirty() { if (!loading && current != null && !ReadOnly()) dirty = true; }
     private bool CanDiscard() => !dirty || NoticeDialog.Show("La scheda contiene modifiche non salvate. Annulla per tornare alla scheda e salvarle, oppure conferma per scartarle.", "Modifiche non salvate", MessageBoxButton.YesNo) == MessageBoxResult.Yes;
@@ -343,6 +348,29 @@ public sealed class MainWindow : Window
         var payload = archive.VerifyBackup(path, password);
         if (NoticeDialog.Show($"Backup verificato: {payload["database"]!["entries"]!.AsArray().Count} schede. Sostituire l’archivio? Prima verrà salvata una copia completa locale. Il ripristino sostituisce le schede, senza unire gli archivi.", "Ripristino", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         string rescue = archive.Restore(path, password); dirty = false; RefreshList(); NoticeDialog.Show("Ripristino completato. Copia preventiva:\n" + rescue);
+    }
+    private void ConnectShared(string folder, string password, bool initialize)
+    {
+        var session = new SharedArchiveSession(folder, Path.Combine(archive.Folder,"sync-state.json"), password, () => SharedArchiveSession.Fingerprint(archive.Database), archive.Export, (path, secret) => archive.Restore(path, secret));
+        session.Open(initialize); sharedSession = session;
+        LocalArchive.AtomicWrite(SharedConfig, System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(folder)));
+    }
+    private void ConfigureShared()
+    {
+        if (!CanDiscard()) return;
+        if (sharedSession != null) { sharedSession.Publish(); NoticeDialog.Show("Aggiornamenti pubblicati. Questa postazione conserva la sessione fino alla chiusura di DentalLab."); return; }
+        var window = new Window { Owner = this, Title = "Disco condiviso tramite VPN", Width = 550, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
+        var panel = new StackPanel { Margin = new Thickness(28) }; window.Content = panel;
+        panel.Children.Add(DesignSystem.Heading(window.Title)); panel.Children.Add(DesignSystem.Caption("Collega prima OpenVPN. Usa una cartella dedicata sul disco. Il primo collegamento importa la versione condivisa, se presente, oppure pubblica questo archivio. Le copie locali precedenti sono conservate."));
+        var folder = new TextBox { Text = File.Exists(SharedConfig) ? File.ReadAllText(SharedConfig) : "" }; Field(panel,"Percorso della cartella condivisa",folder);
+        var secret = new PasswordBox(); Field(panel,"Password condivisa · almeno 12 caratteri",secret);
+        var issue = new TextBlock { Foreground = Brushes.DarkRed, Margin = new Thickness(0,12,0,12) }; panel.Children.Add(issue);
+        var connect = new Button { Content = "Collega e sincronizza", Style = (Style)FindResource("PrimaryButton") }; panel.Children.Add(connect);
+        connect.Click += (_,_) => {
+            if (NoticeDialog.Show("Se la cartella contiene già un archivio DentalLab, sostituirà quello di questa postazione dopo una copia preventiva locale. In una cartella nuova verrà pubblicato l’archivio attuale. Usare un solo computer alla volta.","Primo collegamento",MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+            try { ConnectShared(folder.Text.Trim(),secret.Password,true); dirty = false; RefreshList(); window.DialogResult = true; } catch (Exception error) { issue.Text = error.Message; }
+        };
+        panel.Children.Add(new Button { Content = "Annulla", IsCancel = true, Margin = new Thickness(0,10,0,0) }); window.ShowDialog();
     }
     private void Profile()
     {

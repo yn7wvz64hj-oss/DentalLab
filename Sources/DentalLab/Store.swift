@@ -21,6 +21,19 @@ final class Store: ObservableObject {
     private var lockFD: Int32 = -1
     private var ownsLock = false
     private var sqlite: SQLiteArchive?
+    @Published var sharedSession: SharedArchiveSession?
+    @Published var editedDrafts: Set<UUID> = []
+    var sharedConfig: URL { folder.appendingPathComponent("sync-folder.txt") }
+    var sharedRequired: Bool { FileManager.default.fileExists(atPath: sharedConfig.path) }
+    func connectShared(folder remote: URL, password: String, initialize: Bool) throws {
+        try require(ready && !locked && sharedSession == nil, "Sblocca l’archivio e chiudi eventuali sessioni precedenti.")
+        let session = SharedArchiveSession(folder: remote, stateURL: folder.appendingPathComponent("sync-state.json"), password: password, fingerprint: { [unowned self] in try SharedArchiveSession.fingerprint(self.db) }, export: { [unowned self] url, secret in try self.backup(password: secret, to: url, allowLocked: true) }, restore: { [unowned self] url, secret in try self.restore(password: secret, from: url) })
+        // Export during the first connection is already protected by the local access gate.
+        sharedSession = session
+        do { try session.open(initialize: initialize); try remote.path.write(to: sharedConfig, atomically: true, encoding: .utf8); notice = "Disco collegato. Chiudi DentalLab prima di passare all’altra postazione." }
+        catch { try? session.release(); sharedSession = nil; throw error }
+    }
+    func finishShared() throws { if let session = sharedSession { try session.finish(); sharedSession = nil } }
     var entries: [Entry] { db.entries }
     init(folder: URL = root, testKey: SymmetricKey? = nil) {
         self.folder = folder
@@ -86,7 +99,7 @@ final class Store: ObservableObject {
         db = next
     }
     func commit(_ label: String, recordID: UUID? = nil, update: (inout Database) throws -> Void) -> Bool {
-        guard ready && !locked else { error = "Archivio non disponibile o bloccato."; return false }
+        guard ready && !locked && (!sharedRequired || sharedSession != nil) else { error = "Archivio non disponibile o bloccato."; return false }
         do { var next = db; try update(&next); next.audit.append(Audit(action: label, recordID: recordID, label: label)); try persist(next); if label != "Scadenze aggiornate nel calendario" && db.calendarLink?.automatic == true { calendarBridge.queue(self) }; return true } catch { self.error = error.localizedDescription; return false }
     }
     func save(_ value: Entry) -> Bool {
@@ -181,8 +194,8 @@ final class Store: ObservableObject {
     func attach(_ url: URL, category: String) throws -> Attachment { let data = try Data(contentsOf: url); try require(data.count <= 100 * 1024 * 1024, "Il limite per un allegato è 100 MB."); let f = Attachment(name: url.lastPathComponent, category: category); try saveBlob(data, id: f.id); return f }
     func blob(_ id: UUID) throws -> Data { guard let key = key else { throw AppIssue(message: "Chiave non disponibile.") }; return try Vault.open(Data(contentsOf: blobFolder(db).appendingPathComponent(id.uuidString)), key: key) }
     func exportAttachment(_ f: Attachment) { let panel = NSSavePanel(); panel.nameFieldStringValue = f.name; if panel.runModal() == .OK, let url = panel.url { do { try blob(f.id).write(to: url, options: .atomic); notice = "Allegato esportato. La copia scelta non è cifrata dall’app." } catch { self.error = error.localizedDescription } } }
-    func backup(password: String, to url: URL) throws {
-        try require(ready && !locked, "Archivio non disponibile."); var files: [String: Data] = [:]; var size = 0
+    func backup(password: String, to url: URL, allowLocked: Bool = false) throws {
+        try require(ready && (!locked || (allowLocked && sharedSession != nil)), "Archivio non disponibile."); var files: [String: Data] = [:]; var size = 0
         for f in db.entries.flatMap({ $0.files ?? [] }) where files[f.id.uuidString] == nil { let data = try blob(f.id); size += data.count; try require(size <= 500 * 1024 * 1024, "Backup portabile oltre 500 MB: riduci gli allegati o pianifica un archivio più grande."); files[f.id.uuidString] = data }
         try sqlite?.verify()
         var portableDatabase = db; portableDatabase.fileGeneration = nil

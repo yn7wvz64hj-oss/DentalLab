@@ -3,6 +3,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @State private var sharedPanel = false
     @EnvironmentObject var store: Store
     @State var profile = Profile()
     @State var loaded = false
@@ -15,6 +16,7 @@ struct SettingsView: View {
             if store.entries.contains(where: { $0.section == "Pazienti" }) {
                 Surface { DisclosureGroup("Schede paziente delle versioni precedenti") { ForEach(store.entries.filter { $0.section == "Pazienti" }) { patient in VStack(alignment: .leading) { Text(patient.name).fontWeight(.semibold); Text(patient.detail).font(.caption).foregroundColor(.secondary) }.padding(.vertical, 6) } } }
             }
+            Surface { VStack(alignment: .leading, spacing: 14) { SectionHeading(title: "Sincronizzazione tramite VPN", subtitle: "Un computer alla volta, con archivio cifrato sul disco condiviso."); Button("Disco condiviso e sincronizzazione…") { sharedPanel = true } } }.sheet(isPresented: $sharedPanel) { SharedSyncPanel().environmentObject(store) }
             PasswordPanel(store: store)
             UpdatesPanel()
             CalendarPanel(store: store)

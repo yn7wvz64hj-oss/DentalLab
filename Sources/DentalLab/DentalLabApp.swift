@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 @main struct DentalLabApp: App {
+    @NSApplicationDelegateAdaptor(SharedTerminationDelegate.self) private var termination
     @StateObject private var store: Store
     init() {
         if CommandLine.arguments.contains("--self-test") { setbuf(stdout, nil); do { try SelfTests.run(); exit(0) } catch { fputs("TEST FAILED: \(error)\n", stderr); exit(1) } }
@@ -11,7 +12,7 @@ import AppKit
         AppUpdates.shared.start()
     }
     var body: some Scene {
-        WindowGroup { ContentView().environmentObject(store).onAppear { store.calendarBridge.queue(store) }.frame(minWidth: 1080, minHeight: 700).tint(Palette.teal).labelStyle(.titleAndIcon).buttonStyle(LabButtonStyle()).preferredColorScheme(.light) }
+        WindowGroup { ContentView().environmentObject(store).onAppear { termination.store = store; store.calendarBridge.queue(store) }.frame(minWidth: 1080, minHeight: 700).tint(Palette.teal).labelStyle(.titleAndIcon).buttonStyle(LabButtonStyle()).preferredColorScheme(.light) }
         .windowStyle(.hiddenTitleBar)
         .commands { CommandGroup(after: .appInfo) { UpdateMenuItem() }; CommandGroup(after: .saveItem) { Button("Blocca archivio") { store.lock() }.keyboardShortcut("l", modifiers: [.command, .shift]) } }
     }

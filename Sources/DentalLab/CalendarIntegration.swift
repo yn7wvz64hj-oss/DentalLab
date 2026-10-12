@@ -46,12 +46,12 @@ final class CalendarBridge: ObservableObject {
     }
     func queue(_ store: Store) {
         pending?.cancel()
-        guard store.db.calendarLink?.automatic == true else { return }
+        guard (!store.sharedRequired || store.sharedSession != nil) && store.db.calendarLink?.automatic == true else { return }
         let task = DispatchWorkItem { [weak self, weak store] in if let store = store { self?.sync(store) } }
         pending = task; DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: task)
     }
     func sync(_ store: Store) {
-        guard store.ready && !store.locked && !busy, var link = store.db.calendarLink else { return }
+        guard store.ready && !store.locked && (!store.sharedRequired || store.sharedSession != nil) && !busy, var link = store.db.calendarLink else { return }
         guard allowed else { message = "Sincronizzazione in attesa: autorizza l’accesso ai calendari."; return }
         guard let calendar = eventStore.calendar(withIdentifier: link.calendarID), calendar.allowsContentModifications else { message = "Calendario non disponibile. Ricollegalo nelle impostazioni."; return }
         busy = true; defer { busy = false }

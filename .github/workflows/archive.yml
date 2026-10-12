@@ -25,7 +25,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-fixture
-          path: fixtures/windows.dlbackup
+          path: fixtures
       - run: dotnet publish Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release -r win-x64 --self-contained true -o dist/windows
       - uses: actions/upload-artifact@v4
         with:
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: swift-fixture
-          path: fixtures/out/swift.dlbackup
+          path: fixtures/out
       - run: ditto -c -k --keepParent DentalLab.app DentalLab-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
