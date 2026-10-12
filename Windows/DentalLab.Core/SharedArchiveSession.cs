@@ -39,7 +39,8 @@ public sealed class SharedArchiveSession
         if (reserved) throw new InvalidOperationException("Sessione già aperta.");
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException("Disco non raggiungibile. Collega la VPN e apri la cartella condivisa.");
         if (password.EnumerateRunes().Count() < 12) throw new InvalidDataException("Usa una password condivisa di almeno 12 caratteri.");
-        using (var stream = new FileStream(Lease, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { byte[] bytes = Encoding.UTF8.GetBytes(token); stream.Write(bytes); stream.Flush(true); }
+        try { using var stream = new FileStream(Lease, FileMode.CreateNew, FileAccess.Write, FileShare.None); byte[] bytes = Encoding.UTF8.GetBytes(token); stream.Write(bytes); stream.Flush(true); }
+        catch (IOException issue) { throw new IOException("Disco occupato da un’altra postazione oppure non scrivibile. Chiudi prima DentalLab sull’altra postazione. Dopo un crash verifica tutte le postazioni prima di rimuovere .dentallab-session.", issue); }
         reserved = true;
         try {
             baseline = ReadHead();

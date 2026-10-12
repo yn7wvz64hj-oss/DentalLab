@@ -72,7 +72,7 @@ final class SharedArchiveSession {
         try require(try String(contentsOf: lease, encoding: .utf8) == token, "Prenotazione cambiata: rilascio annullato.")
         try FileManager.default.removeItem(at: lease); reserved = false
     }
-    static func hash(_ data: Data) -> String { SHA256.hash(data).map { String(format: "%02x", $0) }.joined() }
+    static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
     static func fingerprint(_ database: Database) throws -> String {
         var clone = database; clone.audit = []; clone.dailyAccess = nil; clone.calendarLink = nil; clone.fileGeneration = nil
         return try Vault.digest(clone)
