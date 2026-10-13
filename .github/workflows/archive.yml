@@ -27,11 +27,26 @@ jobs:
           name: windows-fixture
           path: fixtures
       - run: dotnet publish Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release -r win-x64 --self-contained true -o dist/windows
-      - run: Copy-Item ARCHIVIO-PORTABILE.md,DESIGN.md,SINCRONIZZAZIONE-VPN.md -Destination dist/windows
+      - run: Copy-Item ARCHIVIO-PORTABILE.md,DESIGN.md,SINCRONIZZAZIONE-VPN.md,INSTALLAZIONE.md -Destination dist/windows
       - uses: actions/upload-artifact@v4
         with:
           name: DentalLab-Windows-x64
           path: dist/windows
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path -LiteralPath $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          }
+          & $compiler "/DSourceDir=$PWD\dist\windows" "/DOutputDir=$PWD\dist\installer" Windows/Installer/DentalLab.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
+      - run: ./Tools/test-windows-installer.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-Installer-Windows-x64
+          path: dist/installer/*.exe
   macos:
     needs: windows
     runs-on: macos-15-intel
@@ -67,6 +82,11 @@ jobs:
         with:
           name: DentalLab-macOS-Intel
           path: DentalLab-macOS.zip
+      - run: bash Tools/package-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-Installer-macOS-Intel
+          path: dist/installer/*.pkg
   roundtrip:
     needs: macos
     runs-on: windows-latest
