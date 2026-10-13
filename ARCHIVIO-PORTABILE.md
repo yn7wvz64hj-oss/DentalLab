@@ -31,7 +31,7 @@ Non avviare una versione precedente sullo stesso archivio dopo la migrazione: le
 
 ## Un solo computer operativo
 
-È un archivio offline, non un servizio LAN. Il programma impedisce due istanze sul medesimo archivio; Windows usa anche un mutex di macchina. Un blocco si libera all'uscita o al crash, senza dover cancellare manualmente `.lock`.
+SQLite resta locale. Il passaggio USB è disponibile; la modalità di scambio su disco tramite VPN è descritta in `SINCRONIZZAZIONE-VPN.md`. Non è un server di database LAN. Il programma impedisce due istanze sul medesimo archivio; Windows usa anche un mutex di macchina. Un blocco si libera all'uscita o al crash, senza dover cancellare manualmente `.lock`.
 
 Due computer offline con copie autonome non possono conoscere lo stato reciproco. **Non è possibile garantire tecnicamente l'esclusione globale di due computer senza un coordinatore condiviso.** Il vincolo operativo è quindi: un solo computer attivo, backup e chiusura prima del passaggio. Non usare SQLite direttamente da USB, cartelle di rete, OneDrive, Dropbox o sincronizzatori. La chiavetta serve a trasportare il backup, non l'archivio in uso.
 
@@ -48,7 +48,7 @@ Il backup comprende tutto il modello: pazienti, studi (`Clienti`), lavori, odont
 
 Formato: `DLBACK02` (8 byte), sale casuale (16 byte), nonce AES-GCM (12 byte), ciphertext e tag (16 byte). Chiave derivata dalla password UTF-8 con PBKDF2-HMAC-SHA256, 310000 iterazioni, 32 byte. Dentro il messaggio autenticato: JSON payload 2, `database`, `files` (base64) e `fileHashes` (SHA-256 esadecimale minuscolo). UUID maiuscoli, date in secondi dal 1 gennaio 2001 UTC, importi JSON numerici: compatibili con Codable Swift. Non si convertono date in stringhe o importi in double per riscrivere il modello importato. AES-GCM autentica anche il manifesto e il database.
 
-Windows permette creazione e modifica di pazienti, studi e contatti, lavorazioni, stato, scadenze, odontogrammi, colori e allegati; consulta anche le altre schede e documenti. Conserva campi non esposti dall'editor, righe economiche e importi senza ricostruirli. Fatture e magazzino sono in sola lettura; numerazione/registrazione, incassi, PDF/XML fiscale, conformità avanzata, calendario macOS e Sparkle restano funzioni del Mac. Windows non è ancora una replica completa di tutti i moduli Mac. Le schede registrate o archiviate sono bloccate anche su Windows.
+Windows permette creazione e modifica di pazienti, studi e contatti, lavorazioni, stato, scadenze, odontogrammi, colori e allegati; consulta anche le altre schede e documenti. Conserva campi non esposti dall'editor, righe economiche e importi senza ricostruirli. Windows aggiunge creazione e riapertura della conformità dalla scheda lavoro, completamento del fascicolo, registrazione DSM, PDF e stampa. Fatture e magazzino sono in sola lettura; numerazione fiscale, incassi, PDF/XML fiscale, calendario macOS e Sparkle restano funzioni del Mac. Vedi `CONFORMITA-E-DENTI.md` per dichiarazioni e selezione multipla. Windows non è ancora una replica completa di tutti i moduli Mac. Le schede registrate o archiviate sono bloccate anche su Windows.
 
 Password giornaliera e collegamento al calendario sono impostazioni del computer ricevente: il ripristino mantiene l'accesso locale e disattiva il collegamento calendario importato. Su un nuovo computer si imposta la propria password di accesso, distinta da quella del backup.
 

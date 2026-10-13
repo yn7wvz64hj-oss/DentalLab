@@ -41,3 +41,7 @@ La testata della schermata usa blu notte e testo chiaro. I pannelli hanno un eff
 ## Menu e conferme
 
 I menu a tendina usano campi arrotondati, etichette esplicite, selezione leggibile e indicatore di apertura. Windows conserva la digitazione libera nei campi modificabili e la navigazione da tastiera; macOS mantiene i menu di sistema in un contenitore coerente con le schede. Le finestre di conferma, errore, registrazione, ripristino e chiusura mostrano titolo, riepilogo e azioni separate. Le operazioni delicate non hanno la conferma come azione predefinita. Chiudere una scheda modificata su Mac richiede di scartare esplicitamente le modifiche. Le finestre di scelta file rimangono quelle del sistema operativo.
+
+### Conformità e applicazione a più denti
+
+La scheda lavoro espone Conformità per creare o riaprire il documento collegato, con PDF e stampa. La mappa mantiene il clic singolo e aggiunge una modalità esplicita di selezione multipla, selezione delle arcate, evidenziazione dei denti scelti e applicazione comune di lavorazione/colore. Le dichiarazioni registrate mantengono la propria copia dei dati; una nuova versione è un documento distinto.
