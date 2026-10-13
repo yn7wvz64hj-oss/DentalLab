@@ -31,7 +31,7 @@ public static class PreviewRenderer
                 db["entries"]!.AsArray().Add(work);
             }
             archive.Save(db);
-            var window = new MainWindow(archive, preview: true); window.VerifyWorkflow();
+            var window = new MainWindow(archive, preview: true); window.VerifyWorkflow(); window.VerifyMultipleTeeth();
             if (Environment.GetEnvironmentVariable("DENTALLAB_PREVIEW_MODULE") == "Panoramica") window.ShowOverviewPreview();
             var content = (FrameworkElement)window.Content;
             content.Measure(new Size(1440,1160)); content.Arrange(new Rect(0,0,1440,1160)); content.UpdateLayout();
@@ -39,6 +39,14 @@ public static class PreviewRenderer
             content.UpdateLayout();
             var image = new RenderTargetBitmap(1440,1160,96,96,PixelFormats.Pbgra32); image.Render(content);
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using (var stream = File.Create(output)) encoder.Save(stream);
+            var declaration = Conformity.Draft(archive.Database["entries"]![0]!.AsObject());
+            declaration["device"]!["instructions"] = string.Concat(Enumerable.Repeat("Istruzioni sintetiche àèìòù per il paziente. ",350)) + " ULTIMA RIGA DI PROVA";
+            byte[] pdf = ConformityOutput.Pdf(declaration,archive.Database);
+            File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(output)!,"DentalLab-Conformita-bozza.pdf"),pdf);
+            using(var stream=new MemoryStream(pdf))using(var parsed=PdfSharp.Pdf.IO.PdfReader.Open(stream,PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import)) {
+                var printable=ConformityOutput.Printable(declaration,archive.Database);printable.DocumentPaginator.ComputePageCount();
+                if(parsed.PageCount<2||printable.DocumentPaginator.PageCount!=parsed.PageCount)throw new InvalidOperationException("PDF and print pagination differ.");
+            }
             var toothDialog = new ToothWorkDialog(11, new ToothRow { Dente = 11, Lavorazione = "Corona in zirconia", Scala = "VITA classical A1–D4", Colore = "A2" });
             var toothPanel = (FrameworkElement)toothDialog.Content; toothDialog.Content = null;
             var toothContent = new System.Windows.Controls.Border { Background = DesignSystem.Brush("Canvas"), Child = toothPanel }; toothContent.Measure(new Size(480,490)); toothContent.Arrange(new Rect(0,0,480,490)); toothContent.UpdateLayout();

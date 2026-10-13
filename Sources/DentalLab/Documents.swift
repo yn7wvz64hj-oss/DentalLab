@@ -1,4 +1,5 @@
 import AppKit
+import PDFKit
 import CoreGraphics
 import Foundation
 import UniformTypeIdentifiers
@@ -79,6 +80,7 @@ struct Documents {
             if e.section == "Fatture" { result.append(PDFBlock(title: "Documento fiscale", text: "Copia di cortesia. L’emissione fiscale richiede trasmissione al Sistema di Interscambio e gestione delle ricevute. Questo PDF e il backup dell’app non sostituiscono la conservazione elettronica a norma.")) }
             if !e.detail.isEmpty { result.append(PDFBlock(title: "Note", text: e.detail)) }
         }
+        if e.section == "Conformità", let works = e.device?.toothWorks, !works.isEmpty { result.insert(PDFBlock(title: "Lavorazioni e colori per dente", text: DentalSelection.summary(works)), at: min(4, result.count)) }
         return result
     }
     static func materialText(_ e: Entry, db: Database) -> String {
@@ -136,6 +138,16 @@ struct Documents {
             y += 18
         }
         ctx.endPDFPage(); ctx.closePDF()
+    }
+    static func printPDF(_ e: Entry, db: Database, store: Store) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("DentalLab-print-" + UUID().uuidString + ".pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        do {
+            FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
+            try pdf(e, db: db, to: url)
+            guard let document = PDFDocument(data: try Data(contentsOf: url)), let operation = document.printOperation(for: NSPrintInfo.shared, scalingMode: .pageScaleToFit, autoRotate: true) else { throw AppIssue(message: "Stampa PDF non disponibile.") }
+            operation.showsPrintPanel = true; operation.run()
+        } catch { store.error = error.localizedDescription }
     }
     static func exportPDF(_ e: Entry, db: Database, store: Store) { let panel = NSSavePanel(); panel.allowedContentTypes = [.pdf]; panel.nameFieldStringValue = e.label.replacingOccurrences(of: "/", with: "-") + ".pdf"; if panel.runModal() == .OK, let url = panel.url { do { try pdf(e, db: db, to: url); store.notice = "PDF esportato." } catch { store.error = error.localizedDescription } } }
     static func exportXML(_ e: Entry, store: Store) { do { let xml = try InvoiceXML.xml(e); let panel = NSSavePanel(); panel.allowedContentTypes = [.xml]; panel.nameFieldStringValue = "IT\(e.issued?.profile.contact.vat ?? "")_\(e.id.uuidString.prefix(10)).xml"; if panel.runModal() == .OK, let url = panel.url { try xml.write(to: url, atomically: true, encoding: .utf8); store.notice = "XML preparato. Verificalo con il servizio fiscale prima dell’invio: i controlli locali non replicano tutti i controlli SDI." } } catch { store.error = error.localizedDescription } }

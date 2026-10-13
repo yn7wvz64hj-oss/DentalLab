@@ -130,6 +130,12 @@ final class Store: ObservableObject {
         if section == "Qualità" || section == "Sorveglianza" { e.quality = Quality(); if section == "Sorveglianza" { e.quality?.kind = "Reclamo" }; e.status = "Aperto" }
         return e
     }
+    func conformity(for work: Entry, forceNew: Bool = false) -> Entry? {
+        guard work.section == "Lavori" else { error = "Seleziona una scheda lavoro."; return nil }
+        if !forceNew, let existing = entries.filter({ $0.section == "Conformità" && $0.workID == work.id && !$0.isArchived }).sorted(by: { ($0.updated ?? $0.created ?? $0.date) > ($1.updated ?? $1.created ?? $1.date) }).first { return existing }
+        var document = create("Conformità", from: work); document.name = "Conformità · " + work.name
+        guard save(document) else { return nil }; return entries.first { $0.id == document.id }
+    }
     func record(_ e: Entry) -> Bool {
         commit("Registrazione documento · \(e.section)", recordID: e.id) { next in
             try Validation.basic(e); try require(!e.isArchived && next.entries.first(where: { $0.id == e.id })?.issued == nil && documentSections.contains(e.section) && e.issued == nil, "Documento già registrato o non registrabile.")
@@ -225,62 +231,52 @@ final class Store: ObservableObject {
         let generation = UUID().uuidString
         let staged = folder.appendingPathComponent("FileCifrati").appendingPathComponent(generation)
         var completed = false
-        defer { if !completed { try? FileManager.default.removeItem(at: staged) } }
-        if key == nil { key = try Vault.localKey(create: true) }
-        // A new physical generation preserves logical attachment IDs and issued digests.
-        try FileManager.default.createDirectory(at: staged, withIntermediateDirectories: true)
-        for (name, data) in payload.files {
-            let target = staged.appendingPathComponent(name)
-            try Vault.seal(data, key: key!).write(to: target, options: .atomic)
-            try require(try Vault.open(Data(contentsOf: target), key: key!) == data, "Verifica allegato non riuscita.")
-        }
-        var next = payload.database
-        next.fileGeneration = generation
-        next.calendarLink = nil
-        next.dailyAccess = db.dailyAccess
-        for (series, value) in db.counters { next.counters[series] = max(next.counters[series] ?? 0, value) }
-        next.audit.append(Audit(action: "Ripristino", recordID: nil, label: "Backup completo ripristinato"))
-        if sqlite == nil {
-            let sqliteURL = folder.appendingPathComponent("archivio.sqlite")
-            sqlite = try SQLiteArchive.install(Vault.seal(JSONEncoder().encode(next), key: key!), at: sqliteURL)
-            db = next
-        } else { try persist(next) }
-        completed = true; ready = true; error = ""; notice = "Backup ripristinato. Copia preventiva: \(rescue.path)"; if usesDailyGate { refreshDailyLock() }
+        defer { if !completed { try? FileManager.default.removeItem(at: …9405 tokens truncated…bject().Clear(); Reject(() => BackupCodec.Validate(missing), "Allegato mancante accettato");
+    var duplicate = (JsonObject)decoded.DeepClone(); duplicate["database"]!["entries"]!.AsArray().Add(duplicate["database"]!["entries"]![0]!.DeepClone()); Reject(() => BackupCodec.Validate(duplicate), "Scheda duplicata accettata");
+    var manifest = (JsonObject)decoded.DeepClone(); manifest["fileHashes"]![fileID] = "errato"; Reject(() => BackupCodec.Validate(manifest), "Hash errato accettato");
+    var unsafeName = (JsonObject)decoded.DeepClone(); unsafeName["files"]!["../file"] = ""; Reject(() => BackupCodec.Validate(unsafeName), "Percorso non valido accettato");
+    var legacy = (JsonObject)decoded.DeepClone(); legacy["version"] = 1; legacy.Remove("fileHashes"); byte[] salt = RandomNumberGenerator.GetBytes(16); byte[] old = "DLBACK02"u8.ToArray().Concat(salt).Concat(BackupCodec.Seal(Encoding.UTF8.GetBytes(legacy.ToJsonString()), BackupCodec.Derive(password, salt))).ToArray(); Check(BackupCodec.Decode(old, password)["version"]!.GetValue<int>() == 1, "Backup v1 non supportato");
+    string folder = Path.Combine(root, "local"), backup = Path.Combine(root, "test.dlbackup");
+    using (var archive = new LocalArchive(folder, key)) {
+        archive.SaveBlob(fileID, file); archive.Save(db); archive.Export(backup, password);
+        Check(!Encoding.UTF8.GetString(ReadShared(Path.Combine(folder, "archivio.sqlite"))).Contains("Paziente sintetico"), "Database in chiaro");
+        Reject(() => { using var competing = new LocalArchive(folder, key); }, "Seconda istanza accettata");
+        var future = (JsonObject)archive.Database.DeepClone(); future["counters"]!["FT-2026"] = 20; archive.Save(future);
+        string rescue = archive.Restore(backup, password);
+        Check(File.Exists(Path.Combine(rescue, "archivio.sqlite")) && File.Exists(Path.Combine(rescue, "FileCifrati", fileID)), "Copia preventiva incompleta");
+        Check(archive.Database["counters"]!["FT-2026"]!.GetValue<int>() == 20, "Contatore abbassato");
+        string newID = archive.Database["entries"]![1]!["files"]![0]!["id"]!.GetValue<string>(); Check(newID == fileID && archive.Blob(newID).SequenceEqual(file), "Ripristino allegati e identità");
+        JsonObject before = (JsonObject)archive.Database.DeepClone(); Reject(() => archive.Restore(backup, "sbagliata"), "Ripristino con password errata"); Check(JsonNode.DeepEquals(before, archive.Database), "Archivio cambiato dopo errore");
+        for (int i = 0; i < 70; i++) archive.Save(archive.Database);
+        using var sql = new SqliteConnection($"Data Source={Path.Combine(folder, "archivio.sqlite")};Pooling=False"); sql.Open(); using var command = sql.CreateCommand(); command.CommandText = "SELECT COUNT(*) FROM revisions"; Check((long)command.ExecuteScalar()! == 60, "Storico non limitato a 60");
     }
-
-    func refreshDailyLock(now: Date = Date()) {
-        needsPasswordSetup = db.dailyAccess == nil
-        locked = needsPasswordSetup || db.dailyAccess!.requiresPassword(at: now)
+    using (var reopened = new LocalArchive(folder, key)) { Check(reopened.Database["entries"]!.AsArray().Count == 2, "Persistenza dopo riavvio"); reopened.VerifySQLite(); }
+    foreach (string point in new[] { "after-rescue", "after-attachment", "before-commit" }) {
+        bool inject = false;
+        using var target = new LocalArchive(Path.Combine(root, point), key) { FailureInjection = p => { if (inject && p == point) throw new IOException("Interruzione simulata"); } };
+        var before = (JsonObject)target.Database.DeepClone(); inject = true;
+        Reject(() => target.Restore(backup, password), "Interruzione non intercettata: " + point);
+        Check(JsonNode.DeepEquals(before, target.Database), "Dati persi: " + point);
+        string blobFolder = Path.Combine(target.Folder, "FileCifrati"); Check(!Directory.Exists(blobFolder) || Directory.GetFiles(blobFolder,"*",SearchOption.AllDirectories).Length == 0, "Allegati parziali: " + point);
+        inject = false; target.VerifySQLite();
     }
-    func setDailyPassword(_ password: String, now: Date = Date()) throws {
-        try require(ready && db.dailyAccess == nil, "La password è già configurata oppure l’archivio non è disponibile.")
-        var next = db; var access = try DailyAccess.make(password); access.lastDay = DailyAccess.today(now); next.dailyAccess = access
-        next.audit.append(Audit(action: "Password configurata", recordID: nil, label: "Protezione giornaliera attivata"))
-        try persist(next); needsPasswordSetup = false; locked = false; calendarBridge.queue(self)
+    string badFolder = Path.Combine(root, "bad"); Directory.CreateDirectory(badFolder); byte[] corruption = "corrotto"u8.ToArray(); File.WriteAllBytes(Path.Combine(badFolder, "archivio.sqlite"), corruption);
+    Reject(() => { using var badArchive = new LocalArchive(badFolder, key); }, "Archivio corrotto accettato"); Check(File.ReadAllBytes(Path.Combine(badFolder, "archivio.sqlite")).SequenceEqual(corruption), "Archivio corrotto sovrascritto");
+    if (OperatingSystem.IsWindows()) {
+        string dpapiFolder = Path.Combine(root, "dpapi"); using (var a = new LocalArchive(dpapiFolder)) { a.Save(db); }
+        using (var a = new LocalArchive(dpapiFolder)) Check(JsonNode.DeepEquals(a.Database, db), "DPAPI dopo riavvio");
+        File.Delete(Path.Combine(dpapiFolder, "local.key")); byte[] original = File.ReadAllBytes(Path.Combine(dpapiFolder, "archivio.sqlite"));
+        Reject(() => { using var a = new LocalArchive(dpapiFolder); }, "Chiave mancante ricreata"); Check(File.ReadAllBytes(Path.Combine(dpapiFolder, "archivio.sqlite")).SequenceEqual(original), "Archivio senza chiave sovrascritto");
     }
-    func checkAccess(_ password: String, now: Date = Date()) throws {
-        try require(now >= retryAfter, "Troppi tentativi. Attendi 30 secondi prima di riprovare.")
-        guard let access = db.dailyAccess, try access.accepts(password) else {
-            failedAccess += 1; if failedAccess >= 5 { retryAfter = now.addingTimeInterval(30) }
-            throw AppIssue(message: "Password non corretta.")
-        }
-        failedAccess = 0; retryAfter = .distantPast
+    string? fixtureOutput = Environment.GetEnvironmentVariable("DENTALLAB_FIXTURE_OUTPUT");
+    if (fixtureOutput != null) { Directory.CreateDirectory(fixtureOutput); File.WriteAllBytes(Path.Combine(fixtureOutput, "windows.dlbackup"), encoded); }
+    string? fixtureInput = Environment.GetEnvironmentVariable("DENTALLAB_FIXTURE_INPUT");
+    if (fixtureInput != null) {
+        var swift = BackupCodec.Decode(File.ReadAllBytes(Path.Combine(fixtureInput, "swift.dlbackup")), password);
+        Check(swift["database"]!["entries"]!.AsArray().Any(e => e?["device"]?["toothWorks"]?.AsArray().Any(t => t?["shade"]?.GetValue<string>() == "A2") == true), "Odontogramma Swift non letto");
+        Check(swift["files"]!.AsObject().Count > 0, "Allegati Swift non letti");
     }
-    func unlockWithPassword(_ password: String, now: Date = Date()) throws {
-        try require(ready, "Archivio non disponibile."); try checkAccess(password, now: now)
-        var next = db; next.dailyAccess?.lastDay = DailyAccess.today(now)
-        next.audit.append(Audit(action: "Accesso", recordID: nil, label: "Accesso autorizzato con password"))
-        try persist(next); locked = false; needsPasswordSetup = false; calendarBridge.queue(self)
-    }
-    func changeDailyPassword(current: String, new: String) throws {
-        try require(ready && !locked, "Sblocca prima l’archivio."); try checkAccess(current)
-        var next = db; var access = try DailyAccess.make(new); access.lastDay = DailyAccess.today(Date()); next.dailyAccess = access
-        next.audit.append(Audit(action: "Password aggiornata", recordID: nil, label: "Password giornaliera modificata")); try persist(next)
-    }
-    func lock() {
-        guard ready else { return }
-        needsPasswordSetup = db.dailyAccess == nil; locked = true
-        var next = db; next.dailyAccess?.lastDay = nil
-        do { try persist(next) } catch { self.error = error.localizedDescription }
-    }
-}
+    checks += SharedArchiveChecks.Run(root, key, password);
+    checks += ConformityChecks.Run(root,key);
+    Console.WriteLine($"PASS · {checks} verifiche: backup, compatibilità, SQLite, cifratura, blocco istanza, DPAPI e rollback.");
+} finally { SqliteConnection.ClearAllPools(); Directory.Delete(root, true); CryptographicOperations.ZeroMemory(key); }

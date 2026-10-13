@@ -60,11 +60,11 @@ public sealed class ToothRow
 public sealed class ToothWorkDialog : Window
 {
     public ToothRow? Result { get; private set; }
-    public ToothWorkDialog(int tooth, ToothRow? existing)
+    public ToothWorkDialog(int tooth, ToothRow? existing, IReadOnlyCollection<int>? selected = null)
     {
         Title = $"Dente {tooth} · lavorazione e colore"; Width = 480; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize; WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var panel = new StackPanel { Margin = new Thickness(24) }; Content = panel;
-        panel.Children.Add(DesignSystem.Heading($"Dente {tooth}")); panel.Children.Add(DesignSystem.Caption("Scegli lavorazione e colore per questo dente. La scheda si registra con Salva scheda."));
+        panel.Children.Add(DesignSystem.Heading(selected?.Count > 1 ? $"{selected.Count} denti selezionati · {string.Join(", ", selected.Order())}" : $"Dente {tooth}")); panel.Children.Add(DesignSystem.Caption("Scegli lavorazione e colore per questo dente. La scheda si registra con Salva scheda."));
         var kind = new ComboBox { IsEditable = true, ItemsSource = new[]{"Corona in zirconia","Corona metallo-ceramica","Corona in disilicato","Ponte — pilastro","Ponte — elemento intermedio","Faccetta","Intarsio","Protesi mobile","Bite","Ortodonzia","Riparazione"}, Text = existing?.Lavorazione ?? "Corona in zirconia" };
         var systems = new List<string> { "VITA classical A1–D4", "VITA 3D-MASTER", "Altra scala" }; if (existing != null && !systems.Contains(existing.Scala)) systems.Add(existing.Scala);
         var scale = new ComboBox { ItemsSource = systems, SelectedItem = existing?.Scala ?? systems[0] };
@@ -74,7 +74,7 @@ public sealed class ToothWorkDialog : Window
         foreach (var field in new (string,UIElement)[]{("Lavorazione",kind),("Scala colore",scale),("Colore / codice",color)}) { panel.Children.Add(new TextBlock { Text = field.Item1, Margin = new Thickness(0,10,0,6) }); panel.Children.Add(field.Item2); }
         var issue = new TextBlock { Foreground = Brushes.DarkRed, Margin = new Thickness(0,12,0,0) }; panel.Children.Add(issue);
         var actions = new WrapPanel { Margin = new Thickness(0,16,0,0) }; panel.Children.Add(actions);
-        var apply = new Button { Content = $"Applica al dente {tooth}", Style = (Style)FindResource("PrimaryButton"), Margin = new Thickness(0,0,8,0) }; actions.Children.Add(apply);
+        var apply = new Button { Content = selected?.Count > 1 ? $"Applica a {selected.Count} denti" : $"Applica al dente {tooth}", Style = (Style)FindResource("PrimaryButton"), Margin = new Thickness(0,0,8,0) }; actions.Children.Add(apply);
         apply.Click += (_,_) => { string work = kind.Text.Trim(), shade = color.Text.Trim(), system = (string)scale.SelectedItem; if (work.Length == 0 || shade.Length == 0 || (system == "VITA classical A1–D4" && !color.Items.Cast<string>().Contains(shade))) { issue.Text = "Inserisci lavorazione e un codice colore valido per la scala scelta."; return; } Result = new ToothRow { Dente = tooth, Lavorazione = work, Scala = system, Colore = shade }; DialogResult = true; };
         var cancel = new Button { Content = "Annulla", IsCancel = true }; actions.Children.Add(cancel);
     }
@@ -97,7 +97,11 @@ public sealed class MainWindow : Window
     private readonly ComboBox workFilter = new() { ItemsSource = new[] { "Tutti gli attivi", "Oggi", "In ritardo", "Da iniziare", "In lavorazione", "In prova", "Pronto", "Consegnato", "Archiviati" }, SelectedIndex = 0 };
     private readonly TextBlock resultCount = new();
     private readonly Dictionary<string, Button> navigation = [];
-    private Button? saveAction;
+    private Button? saveAction, conformityAction;
+    private readonly HashSet<int> selectedTeeth = [];
+    private readonly CheckBox multipleTeeth = new() { Content = "Selezione multipla" };
+    private readonly TextBlock selectionLabel = new();
+    private int? toothAnchor;
     private readonly Dictionary<int,Button> toothButtons = [];
     private readonly TextBlock workspaceTitle = new() { Text = "Lavori", FontSize = 30, FontWeight = FontWeights.SemiBold };
     private JsonObject? current;
@@ -153,13 +157,15 @@ public sealed class MainWindow : Window
         var chart = new StackPanel(); dental.Children.Add(chart);
         foreach (var arch in new[] { new[]{18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28}, new[]{48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38} }) {
             var row = new UniformGrid { Columns = arch.Length, Margin = new Thickness(0,0,0,4) }; chart.Children.Add(row);
-            foreach (int tooth in arch) { var tile = Button(row, tooth.ToString(), () => EditTooth(tooth)); tile.Style = (Style)FindResource("ToothButton"); tile.Padding = new Thickness(2,8,2,8); tile.Margin = new Thickness(2); tile.ToolTip = "Dente " + tooth; toothButtons[tooth] = tile; }
+            foreach (int tooth in arch) { var tile = Button(row, tooth.ToString(), () => SelectTooth(tooth)); tile.Style = (Style)FindResource("ToothButton"); tile.Padding = new Thickness(2,8,2,8); tile.Margin = new Thickness(2); tile.ToolTip = "Dente " + tooth; toothButtons[tooth] = tile; }
         }
+        var selection = new WrapPanel { Margin = new Thickness(0,12,0,8) }; dental.Children.Add(selection); selection.Children.Add(multipleTeeth); selection.Children.Add(selectionLabel);
+        Button(selection,"Arcata superiore",()=>SelectArch(true)); Button(selection,"Arcata inferiore",()=>SelectArch(false)); Button(selection,"Azzera selezione",()=>{selectedTeeth.Clear();toothAnchor=null;RefreshTeeth();}); Button(selection,"Applica ai denti selezionati…",EditSelectedTeeth);
         teeth.Margin = new Thickness(0,12,0,8); dental.Children.Add(teeth); Button(dental, "Modifica lavorazione e colore", () => { if (teeth.SelectedItem is ToothRow selected) EditTooth(selected.Dente); }); Button(dental, "Rimuovi lavorazione del dente selezionato", () => { if (!ReadOnly() && teeth.SelectedItem is ToothRow selected) { toothRows.Remove(selected); RefreshTeeth(); MarkDirty(); } }); editor.Children.Add(DesignSystem.Card(dental));
         foreach (var column in new[] { ("Dente", nameof(ToothRow.Dente)), ("Lavorazione", nameof(ToothRow.Lavorazione)), ("Scala colore", nameof(ToothRow.Scala)), ("Colore", nameof(ToothRow.Colore)) }) teeth.Columns.Add(new DataGridTextColumn { Header = column.Item1, Binding = new Binding(column.Item2), Width = new DataGridLength(column.Item1 is "Dente" or "Colore" ? 0.5 : 1.5, DataGridLengthUnitType.Star) });
         var documents = new StackPanel(); documents.Children.Add(DesignSystem.Heading("Allegati e documenti")); documents.Children.Add(DesignSystem.Caption("Prescrizioni, foto e file del fascicolo, collegati alla scheda.")); documents.Children.Add(attachments);
         var fileButtons = new WrapPanel(); documents.Children.Add(fileButtons); Button(fileButtons, "Aggiungi allegato", Attach); Button(fileButtons, "Esporta allegato", ExportAttachment); Button(fileButtons, "Rimuovi riferimento", RemoveAttachment); editor.Children.Add(DesignSystem.Card(documents));
-        var actions = new WrapPanel(); editor.Children.Add(actions); Button(actions, "Salva scheda", Save); Button(actions, "Contatti dello studio", EditContact); Button(actions, "Mostra scheda completa", ShowFullRecord);
+        var actions = new WrapPanel(); editor.Children.Add(actions); Button(actions, "Salva scheda", Save); conformityAction = Button(actions, "Conformità…", OpenConformity); Button(actions, "Contatti dello studio", EditContact); Button(actions, "Mostra scheda completa", ShowFullRecord);
         var limitation = new TextBlock { Text = "Documenti registrati e schede archiviate sono in sola lettura. Numerazione fiscale, XML/PDF, magazzino e calendario avanzati si gestiscono sul Mac.", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray }; editor.Children.Add(limitation);
         section.SelectionChanged += (_, _) => { workspaceTitle.Text = (string)section.SelectedItem == "Panoramica" ? "Il laboratorio, oggi" : (string)section.SelectedItem; if (unlocked) RefreshList(); }; search.TextChanged += (_, _) => { if (!loading && unlocked && CanDiscard()) RefreshList(); };
         workFilter.SelectionChanged += (_, e) => { if (loading || !unlocked) return; if (CanDiscard()) RefreshList(); else { loading = true; if (e.RemovedItems.Count > 0) workFilter.SelectedItem = e.RemovedItems[0]; loading = false; } };
@@ -274,6 +280,7 @@ public sealed class MainWindow : Window
     private void LoadForm()
     {
         editor.IsEnabled = true; if (saveAction != null) saveAction.IsEnabled = !ReadOnly();
+        selectedTeeth.Clear(); toothAnchor = null; multipleTeeth.IsChecked = false; if(conformityAction != null) conformityAction.Visibility = current?["section"]?.GetValue<string>() is "Lavori" or "Conformità" ? Visibility.Visible : Visibility.Collapsed;
         loading = true; name.Text = current!["name"]!.GetValue<string>(); patient.Text = current["patient"]!.GetValue<string>(); detail.Text = current["detail"]!.GetValue<string>(); state.Text = current["status"]!.GetValue<string>();
         client.ItemsSource = archive.Database["entries"]!.AsArray().Where(e => e!["section"]!.GetValue<string>() == "Clienti").Select(e => new Row(e!["id"]!.GetValue<string>(), e["name"]!.GetValue<string>())).ToList();
         client.SelectedItem = client.Items.Cast<Row>().FirstOrDefault(r => r.ID == current["clientID"]?.GetValue<string>()); client.Text = current["client"]!.GetValue<string>();
@@ -282,11 +289,39 @@ public sealed class MainWindow : Window
         RefreshTeeth(); RefreshAttachments(); dirty = false; loading = false;
         foreach (var control in new Control[] { name, patient, detail, client, state, date, teeth }) control.IsEnabled = !ReadOnly();
     }
-    private void RefreshTeeth() { teeth.ItemsSource = null; teeth.ItemsSource = toothRows; foreach (var (tooth,tile) in toothButtons) { var work = toothRows.FirstOrDefault(t => t.Dente == tooth); bool assigned = work != null; tile.Content = assigned ? $"{tooth}\n{work!.Colore}" : tooth.ToString(); tile.MinHeight = 48; tile.ToolTip = assigned ? $"Dente {tooth} · {work!.Lavorazione} · {work.Scala} {work.Colore}" : $"Dente {tooth} · scegli lavorazione e colore"; tile.Background = assigned ? DesignSystem.Brush("Pale") : Brushes.White; tile.BorderBrush = assigned ? DesignSystem.Brush("Accent") : DesignSystem.Brush("Line"); } }
+    private void RefreshTeeth() { teeth.ItemsSource = null; teeth.ItemsSource = toothRows; foreach (var (tooth,tile) in toothButtons) { var work = toothRows.FirstOrDefault(t => t.Dente == tooth); bool assigned = work != null; tile.Content = assigned ? $"{tooth}\n{work!.Colore}" : tooth.ToString(); tile.MinHeight = 48; tile.ToolTip = assigned ? $"Dente {tooth} · {work!.Lavorazione} · {work.Scala} {work.Colore}" : $"Dente {tooth} · scegli lavorazione e colore"; tile.Background = selectedTeeth.Contains(tooth) ? DesignSystem.Brush("Accent") : assigned ? DesignSystem.Brush("Pale") : Brushes.White; tile.Foreground = selectedTeeth.Contains(tooth) ? Brushes.White : DesignSystem.Brush("Accent"); tile.BorderBrush = assigned ? DesignSystem.Brush("Accent") : DesignSystem.Brush("Line"); } selectionLabel.Text = $"  {selectedTeeth.Count} denti selezionati  "; }
     private void EditTooth(int tooth) {
         if (ReadOnly()) return;
         var dialog = new ToothWorkDialog(tooth, toothRows.FirstOrDefault(t => t.Dente == tooth)) { Owner = this };
         if (dialog.ShowDialog() == true && dialog.Result is ToothRow result) { toothRows.RemoveAll(t => t.Dente == tooth); toothRows.Add(result); RefreshTeeth(); teeth.SelectedItem = result; MarkDirty(); }
+    }
+    private static readonly int[] UpperTeeth = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28], LowerTeeth = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+    private void SelectTooth(int tooth) {
+        if(ReadOnly())return; var flags=System.Windows.Input.Keyboard.Modifiers;
+        bool range=flags.HasFlag(System.Windows.Input.ModifierKeys.Shift), extend=multipleTeeth.IsChecked==true||flags.HasFlag(System.Windows.Input.ModifierKeys.Control);
+        int[]? arch=toothAnchor is int anchor ? new[]{UpperTeeth,LowerTeeth}.FirstOrDefault(a=>a.Contains(anchor)&&a.Contains(tooth)):null;
+        if(range && arch!=null){int a=Array.IndexOf(arch,toothAnchor!.Value),b=Array.IndexOf(arch,tooth);foreach(int id in arch[Math.Min(a,b)..(Math.Max(a,b)+1)])selectedTeeth.Add(id);}
+        else if(extend){if(!selectedTeeth.Add(tooth))selectedTeeth.Remove(tooth);toothAnchor=tooth;}
+        else{selectedTeeth.Clear();selectedTeeth.Add(tooth);toothAnchor=tooth;}
+        RefreshTeeth(); if(!range&&!extend)EditTooth(tooth);
+    }
+    private void SelectArch(bool upper){if(ReadOnly())return;selectedTeeth.Clear();foreach(int id in upper?UpperTeeth:LowerTeeth)selectedTeeth.Add(id);multipleTeeth.IsChecked=true;RefreshTeeth();}
+    private void EditSelectedTeeth(){if(ReadOnly())return;if(selectedTeeth.Count==0)throw new InvalidDataException("Seleziona uno o più denti nella mappa.");int first=selectedTeeth.Min();var dialog=new ToothWorkDialog(first,toothRows.FirstOrDefault(t=>t.Dente==first),selectedTeeth.ToArray()){Owner=this};if(dialog.ShowDialog()==true&&dialog.Result is ToothRow result)ApplySelected(result);}
+    private void ApplySelected(ToothRow result){toothRows.RemoveAll(t=>selectedTeeth.Contains(t.Dente));foreach(int id in selectedTeeth)toothRows.Add(new ToothRow{Dente=id,Lavorazione=result.Lavorazione,Scala=result.Scala,Colore=result.Colore});RefreshTeeth();MarkDirty();}
+    internal void VerifyMultipleTeeth(){var before=toothRows.ToList();toothRows.Add(new ToothRow{Dente=16,Lavorazione="Intarsio",Scala=Classical,Colore="A1"});selectedTeeth.Clear();selectedTeeth.UnionWith(new[]{11,21});ApplySelected(new ToothRow{Lavorazione="Ponte — pilastro",Scala=Classical,Colore="A3"});if(toothRows.Count!=before.Count+1||toothRows.First(t=>t.Dente==16).Colore!="A1"||toothRows.Where(t=>t.Dente is 11 or 21).Count(t=>t.Colore=="A3")!=2)throw new InvalidOperationException("Multiple tooth assignments failed.");toothRows=before;selectedTeeth.Clear();dirty=false;RefreshTeeth();Console.WriteLine("PASS · bulk tooth assignment preserves other teeth.");}
+    private void OpenConformity(){
+        if(current==null)throw new InvalidDataException("Seleziona una scheda lavoro.");
+        if(!ReadOnly()&&dirty)Save();
+        JsonObject doc;
+        if(current!["section"]!.GetValue<string>()=="Conformità")doc=(JsonObject)current.DeepClone();
+        else if(current["section"]!.GetValue<string>()=="Lavori"){
+            string id=Conformity.Text(current,"id");var linked=archive.Database["entries"]!.AsArray().OfType<JsonObject>().Where(e=>Conformity.Text(e,"section")=="Conformità"&&Conformity.Text(e,"workID")==id&&e["archived"]?.GetValue<bool>()!=true).OrderByDescending(e=>e["updated"]?.GetValue<double>()??e["created"]?.GetValue<double>()??0).FirstOrDefault();
+            if(linked!=null)doc=(JsonObject)linked.DeepClone();else{var source=(JsonObject)current.DeepClone();source["device"]??=NewDevice();doc=Conformity.Draft(source);Conformity.Save(archive,doc,(JsonObject)archive.Database["profile"]!);}
+        }else throw new InvalidDataException("Apri un lavoro o una dichiarazione.");
+        string currentID=Conformity.Text(current,"id");
+        JsonObject? sourceWork = current["section"]!.GetValue<string>()=="Lavori" ? (JsonObject)current.DeepClone() : archive.Database["entries"]!.AsArray().OfType<JsonObject>().FirstOrDefault(e=>Conformity.Text(e,"id")==Conformity.Text(doc,"workID"));
+        Action? newVersion = sourceWork==null ? null : () => Dispatcher.BeginInvoke(new Action(()=>Perform(()=>{var fresh=Conformity.Draft(sourceWork);Conformity.Save(archive,fresh,(JsonObject)archive.Database["profile"]!);new ConformityDialog(archive,fresh){Owner=this}.ShowDialog();RefreshList();Load(currentID);}))) ;
+        new ConformityDialog(archive,doc,newVersion){Owner=this}.ShowDialog();RefreshList();if(archive.Database["entries"]!.AsArray().Any(e=>Conformity.Text(e,"id")==currentID)){loading=true;list.SelectedItem=list.Items.Cast<Row>().FirstOrDefault(r=>r.ID==currentID);loading=false;Load(currentID);}
     }
     private void RefreshAttachments() => attachments.ItemsSource = (current?["files"]?.AsArray() ?? new JsonArray()).Select(f => new Row(f!["id"]!.GetValue<string>(), f["name"]!.GetValue<string>())).ToList();
     private void New()

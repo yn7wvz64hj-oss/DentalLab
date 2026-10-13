@@ -19,8 +19,9 @@ struct Editor: View {
     @State var paying = false
     @State var sdi = false
     @State var closing = false
-    let original: Entry
-    init(entry: Entry, initialTab: String = "Scheda") { _tab = State(initialValue: initialTab); var e = entry; if e.contact == nil { e.contact = Contact() }; if e.device == nil { e.device = Device() }; if e.quality == nil { e.quality = Quality() }; _entry = State(initialValue: e); original = e }
+    @State var savedEntry: Entry
+    @State var conformity: Entry?
+    init(entry: Entry, initialTab: String = "Scheda") { _tab = State(initialValue: initialTab); var e = entry; if e.contact == nil { e.contact = Contact() }; if e.device == nil { e.device = Device() }; if e.quality == nil { e.quality = Quality() }; _entry = State(initialValue: e); _savedEntry = State(initialValue: e) }
     var readOnly: Bool { entry.issued != nil || entry.isArchived }
     var contact: Binding<Contact> { Binding(get: { entry.contact ?? Contact() }, set: { entry.contact = $0 }) }
     var device: Binding<Device> { Binding(get: { entry.device ?? Device() }, set: { entry.device = $0 }) }
@@ -41,16 +42,25 @@ struct Editor: View {
                 if tab == "Incassi" { paymentsView }
             }.padding(24) }.background { WorkspaceBackdrop() }
             Divider()
-            HStack { Button("Chiudi") { if !readOnly && entry != original { closing = true } else { dismiss() } }.keyboardShortcut(.cancelAction); Button { Documents.exportPDF(entry, db: store.db, store: store) } label: { Label("PDF", systemImage: "arrow.down.doc") }; if entry.section == "Fatture" && entry.issued != nil { Button("XML…") { Documents.exportXML(entry, store: store) } }; Spacer(); if documentSections.contains(entry.section) && !readOnly { Button("Registra documento…") { registering = true } }; if !readOnly { Button("Salva bozza") { if store.save(entry) { dismiss() } }.buttonStyle(LabButtonStyle(primary: true)).keyboardShortcut(.defaultAction) } }.padding(20).background(Color.white)
+            HStack { Button("Chiudi") { if !readOnly && entry != savedEntry { closing = true } else { dismiss() } }.keyboardShortcut(.cancelAction); Button { Documents.exportPDF(entry, db: store.db, store: store) } label: { Label("PDF", systemImage: "arrow.down.doc") }; if entry.section == "Lavori" { Button("Conformità…", action: openConformity) }; if entry.section == "Conformità" { Button("Stampa…") { Documents.printPDF(entry, db: store.db, store: store) }; if entry.issued != nil { Button("Nuova versione…") { if let work = store.entries.first(where: { $0.id == entry.workID }) { conformity = store.conformity(for: work, forceNew: true) } } } }; if entry.section == "Fatture" && entry.issued != nil { Button("XML…") { Documents.exportXML(entry, store: store) } }; Spacer(); if documentSections.contains(entry.section) && !readOnly { Button("Registra documento…") { registering = true } }; if !readOnly { Button("Salva bozza") { if store.save(entry) { dismiss() } }.buttonStyle(LabButtonStyle(primary: true)).keyboardShortcut(.defaultAction) } }.padding(20).background(Color.white)
         }.buttonStyle(LabButtonStyle()).frame(width: min(990, (NSScreen.main?.visibleFrame.width ?? 1100) - 60), height: min(770, (NSScreen.main?.visibleFrame.height ?? 850) - 70)).tint(Palette.teal)
-        .onChange(of: entry) { value in if !readOnly && value != original { store.editedDrafts.insert(entry.id) } else { store.editedDrafts.remove(entry.id) } }
+        .onChange(of: entry) { value in if !readOnly && value != savedEntry { store.editedDrafts.insert(entry.id) } else { store.editedDrafts.remove(entry.id) } }
         .onDisappear { store.editedDrafts.remove(entry.id) }
-        .interactiveDismissDisabled(!readOnly && entry != original)
+        .interactiveDismissDisabled(!readOnly && entry != savedEntry)
         .sheet(isPresented: $closing) { LabConfirmation(title: "Modifiche non salvate", message: "La scheda contiene modifiche non salvate. Torna alla scheda per salvarle oppure conferma la chiusura per scartarle.", actionTitle: "Scarta e chiudi", cancelTitle: "Torna alla scheda", cancel: { closing = false }, action: { closing = false; dismiss() }) }
         .sheet(isPresented: $registering) { LabConfirmation(title: "Registrare il documento?", message: "Verrà assegnato un numero progressivo e il contenuto sarà bloccato. Verifica i dati e il trattamento fiscale. La registrazione non equivale all’invio SDI o alla firma della dichiarazione.", actionTitle: "Registra documento", cancel: { registering = false }, action: { registering = false; if store.record(entry) { dismiss() } }) }
         .labAlert("Operazione non completata", isPresented: Binding(get: { !store.error.isEmpty }, set: { if !$0 { store.error = "" } })) { Button("OK") { store.error = "" } } message: { Text(store.error) }
+        .sheet(item: $conformity) { e in Editor(entry: e, initialTab: "Dispositivo").environmentObject(store) }
         .sheet(isPresented: $paying) { PaymentEditor(entryID: entry.id).environmentObject(store) }
         .sheet(isPresented: $sdi) { SDIEditor(entryID: entry.id).environmentObject(store) }
+    }
+    func openConformity() {
+        var work = entry
+        if !readOnly && (entry != savedEntry || !store.entries.contains(where: { $0.id == entry.id })) {
+            guard store.save(entry) else { return }
+            work = store.entries.first { $0.id == entry.id } ?? entry; entry = work; savedEntry = work; store.editedDrafts.remove(work.id)
+        }
+        conformity = store.conformity(for: work)
     }
     var general: some View {
         VStack(alignment: .leading, spacing: 18) {

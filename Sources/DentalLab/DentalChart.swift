@@ -54,12 +54,14 @@ struct DentalChart: View {
     @State private var customKind = ""
     @State private var issue = ""
     @State private var removing = false
+    @State private var multiple = false
     let readOnly: Bool
     var upper: [Int] { DentalSelection.upper }
     var lower: [Int] { DentalSelection.lower }
     var body: some View {
         Surface { VStack(alignment: .leading, spacing: 14) {
-            SectionHeading(title: "Lavorazione e colore per dente", subtitle: "Scegli un dente, imposta lavorazione e colore, poi applica. Ctrl o ⌘ permette di selezionare più denti.")
+            SectionHeading(title: "Lavorazione e colore per dente", subtitle: "Scegli un dente, imposta lavorazione e colore, poi applica. Attiva Selezione multipla per aggiungere denti con un clic. Ctrl/⌘ e Maiuscolo restano disponibili.")
+            HStack { Toggle("Selezione multipla", isOn: $multiple).toggleStyle(.switch); Button("Arcata superiore") { multiple = true; selected = Set(upper); anchor = upper.first }; Button("Arcata inferiore") { multiple = true; selected = Set(lower); anchor = lower.first }; Button("Azzera") { selected = []; anchor = nil }; Spacer() }.disabled(readOnly)
             HStack { Spacer(); Text("Destra del paziente ← → Sinistra del paziente").font(.caption).foregroundColor(.secondary) }
             GeometryReader { geometry in
                 let width = geometry.size.width
@@ -108,7 +110,7 @@ struct DentalChart: View {
         }
     }
     func choose(_ tooth: Int, flags: NSEvent.ModifierFlags) {
-        let extending = flags.contains(.control) || flags.contains(.command)
+        let extending = multiple || flags.contains(.control) || flags.contains(.command)
         let ranging = flags.contains(.shift)
         selected = DentalSelection.click(tooth, selected: selected, anchor: anchor, extend: extending, range: ranging)
         if !ranging { anchor = tooth }

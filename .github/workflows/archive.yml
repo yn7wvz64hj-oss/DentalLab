@@ -15,10 +15,12 @@ jobs:
           dotnet-version: '8.0.x'
       - run: dotnet build Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release
       - run: dotnet Windows/DentalLab.Windows/bin/Release/net8.0-windows/DentalLab.dll --preview previews/windows.png
+      - run: python -m pip install pymupdf==1.26.4
+      - run: python Tools/check-conformity-pdf.py
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-design-preview
-          path: previews/windows.png
+          path: previews
       - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
         env:
           DENTALLAB_FIXTURE_OUTPUT: fixtures
@@ -27,7 +29,7 @@ jobs:
           name: windows-fixture
           path: fixtures
       - run: dotnet publish Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release -r win-x64 --self-contained true -o dist/windows
-      - run: Copy-Item ARCHIVIO-PORTABILE.md,DESIGN.md,SINCRONIZZAZIONE-VPN.md,INSTALLAZIONE.md -Destination dist/windows
+      - run: Copy-Item ARCHIVIO-PORTABILE.md,DESIGN.md,SINCRONIZZAZIONE-VPN.md,INSTALLAZIONE.md,CONFORMITA-E-DENTI.md -Destination dist/windows
       - uses: actions/upload-artifact@v4
         with:
           name: DentalLab-Windows-x64
