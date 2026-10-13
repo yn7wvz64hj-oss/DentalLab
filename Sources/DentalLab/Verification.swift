@@ -10,6 +10,7 @@ struct SelfTests {
         try SharedArchiveChecks.run()
         print("CHECK · moduli e persistenza esistenti")
         try DentalChartChecks.run()
+        try ConformityChecks.run()
         var deadlineWork = Entry(section: "Lavori"); deadlineWork.name = "Nome clinico da non inviare"; deadlineWork.patient = "Paziente riservato"
         deadlineWork.date = ISO8601DateFormatter().date(from: "2026-03-29T12:00:00Z")!
         let planned = Deadline.make([deadlineWork, Entry(section: "Clienti")])

@@ -74,5 +74,6 @@ try {
         Check(swift["files"]!.AsObject().Count > 0, "Allegati Swift non letti");
     }
     checks += SharedArchiveChecks.Run(root, key, password);
+    checks += ConformityChecks.Run(root,key);
     Console.WriteLine($"PASS · {checks} verifiche: backup, compatibilità, SQLite, cifratura, blocco istanza, DPAPI e rollback.");
 } finally { SqliteConnection.ClearAllPools(); Directory.Delete(root, true); CryptographicOperations.ZeroMemory(key); }
