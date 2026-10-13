@@ -6,7 +6,7 @@ func numeric(_ value: Decimal) -> String { NSDecimalNumber(decimal: value).strin
 func day(_ date: Date) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "it_IT"); f.dateStyle = .medium; return f.string(from: date) }
 func isoDay(_ date: Date) -> String { let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Europe/Rome"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date) }
 let workStates = ["Da iniziare", "In lavorazione", "In prova", "Pronto", "Consegnato"]
-let sections = ["Panoramica", "Lavori", "Scadenze", "Clienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza", "Attività", "Impostazioni"]
+let sections = ["Panoramica", "Lavori", "Scadenze", "Pazienti", "Clienti", "Listino", "Preventivi", "Consegne", "Fatture", "Magazzino", "Conformità", "Qualità", "Sorveglianza", "Attività", "Impostazioni"]
 let documentSections = ["Preventivi", "Consegne", "Fatture", "Conformità"]
 struct Contact: Codable, Equatable {
     var vat = ""; var taxCode = ""; var address = ""; var zip = ""; var city = ""; var province = ""; var email = ""; var phone = ""; var recipient = "0000000"; var pec = ""
@@ -53,8 +53,8 @@ struct Entry: Codable, Identifiable, Equatable {
     }
 }
 struct TaxGroup { var vat: Decimal; var nature: String; var reference: String; var net: Decimal; var tax: Decimal { roundMoney(net * vat / 100) } }
-struct Database: Codable { var dailyAccess: DailyAccess?; var calendarLink: CalendarLink?; var version = 2; var entries: [Entry] = []; var profile = Profile(); var movements: [StockMovement] = []; var audit: [Audit] = []; var counters: [String: Int] = [:] }
-struct PortableBackup: Codable { var version = 1; var database: Database; var files: [String: Data] }
+struct Database: Codable { var fileGeneration: String?; var dailyAccess: DailyAccess?; var calendarLink: CalendarLink?; var version = 2; var entries: [Entry] = []; var profile = Profile(); var movements: [StockMovement] = []; var audit: [Audit] = []; var counters: [String: Int] = [:] }
+struct PortableBackup: Codable { var version = 2; var database: Database; var files: [String: Data]; var fileHashes: [String: String]? }
 struct AppIssue: LocalizedError { var message: String; var errorDescription: String? { message } }
 func require(_ condition: Bool, _ message: String) throws { if !condition { throw AppIssue(message: message) } }
 struct Validation {

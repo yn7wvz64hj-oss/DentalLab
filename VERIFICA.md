@@ -43,3 +43,6 @@ Test con archivio e chiave temporanei: primo accesso bloccato senza password, co
 ### Mappa dentale
 
 Test della selezione singola, aggiunta/rimozione Ctrl, intervallo Maiuscolo nella stessa arcata e attraverso la linea mediana, esclusione di intervalli tra arcate diverse; applicazione multipla e sostituzione senza modificare elementi non selezionati; 52 identificativi distinti tra permanenti e decidui, codici VITA classical, salvataggio/lettura Codable e migrazione dai dispositivi senza mappa. Riepilogo per PDF verificato. Verificata la consegna dei modificatori Ctrl/Maiuscolo dai callback NSView.mouseDown/rightMouseDown mediante eventi sintetici. Verificati inoltre i blocchi del PDF, il rifiuto di elementi duplicati e la rimozione completa senza riutilizzare dati dentali precedenti. Accessibilità e tastiera prevedono Spazio/Invio. Il clic fisico con modificatori non è stato provato nel Finder su un archivio reale.
+# Verifiche archivio portabile
+
+Per SQLite, Windows, backup USB e test di compatibilità bidirezionale vedere [ARCHIVIO-PORTABILE.md](ARCHIVIO-PORTABILE.md). La CI compila e testa entrambi i sistemi prima della promozione. I risultati precedenti qui sotto descrivono la versione Mac precedente alla migrazione.

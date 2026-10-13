@@ -29,3 +29,6 @@ Questo documento distingue le funzioni implementate dagli adempimenti profession
 Le pagine e i download correnti dell’Agenzia delle Entrate hanno risposto HTTP 403; il tentativo da browser è stato bloccato dal client. Non è stato possibile acquisire e validare lo schema ufficiale corrente. L’app non mostra quindi un’etichetta di conformità fiscale o una conferma di emissione basata sui soli controlli locali.
 
 Percorso necessario prima dell’uso: ottenere lo schema e le specifiche correnti dall’Agenzia, validare gli esempi del laboratorio, completare i controlli specifici richiesti e collegare/testare il servizio SDI e di conservazione scelto. L’app preparata non ha inviato dati o documenti a servizi esterni.
+# Aggiornamento SQLite e Windows
+
+Per i requisiti e limiti della nuova versione vedere [ARCHIVIO-PORTABILE.md](ARCHIVIO-PORTABILE.md), che prevale sulle descrizioni precedenti di persistenza e backup riportate sotto.

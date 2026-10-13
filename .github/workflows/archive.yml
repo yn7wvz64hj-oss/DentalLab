@@ -1,0 +1,106 @@
+name: Archive and desktop compatibility
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet build Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release
+      - run: dotnet Windows/DentalLab.Windows/bin/Release/net8.0-windows/DentalLab.dll --preview previews/windows.png
+      - run: python -m pip install pymupdf==1.26.4
+      - run: python Tools/check-conformity-pdf.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-design-preview
+          path: previews
+      - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
+        env:
+          DENTALLAB_FIXTURE_OUTPUT: fixtures
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-fixture
+          path: fixtures
+      - run: dotnet publish Windows/DentalLab.Windows/DentalLab.Windows.csproj -c Release -r win-x64 --self-contained true -o dist/windows
+      - run: Copy-Item ARCHIVIO-PORTABILE.md,DESIGN.md,SINCRONIZZAZIONE-VPN.md,INSTALLAZIONE.md,CONFORMITA-E-DENTI.md -Destination dist/windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-Windows-x64
+          path: dist/windows
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path -LiteralPath $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          }
+          & $compiler "/DSourceDir=$PWD\dist\windows" "/DOutputDir=$PWD\dist\installer" Windows/Installer/DentalLab.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
+      - run: ./Tools/test-windows-installer.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-Installer-Windows-x64
+          path: dist/installer/*.exe
+  macos:
+    needs: windows
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-fixture
+          path: fixtures/in
+      - run: bash compila.sh
+      - run: |
+          mkdir -p previews
+          DentalLab.app/Contents/MacOS/DentalLab --preview "$PWD/previews/macos.png"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS-design-preview
+          path: previews/macos.png
+      - run: |
+          if ! DentalLab.app/Contents/MacOS/DentalLab --self-test; then
+            lldb --batch -o run -o 'thread backtrace all' -- DentalLab.app/Contents/MacOS/DentalLab --self-test
+            exit 1
+          fi
+        env:
+          DENTALLAB_FIXTURE_INPUT: fixtures/in
+          DENTALLAB_FIXTURE_OUTPUT: fixtures/out
+          SWIFT_BACKTRACE: 'enable=yes,demangle=yes,interactive=no'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swift-fixture
+          path: fixtures/out
+      - run: ditto -c -k --keepParent DentalLab.app DentalLab-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-macOS-Intel
+          path: DentalLab-macOS.zip
+      - run: bash Tools/package-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DentalLab-Installer-macOS-Intel
+          path: dist/installer/*.pkg
+  roundtrip:
+    needs: macos
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-fixture
+          path: fixtures
+      - run: dotnet run --project Windows/DentalLab.Tests/DentalLab.Tests.csproj -c Release
+        env:
+          DENTALLAB_FIXTURE_INPUT: fixtures

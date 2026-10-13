@@ -25,16 +25,31 @@ struct Vault {
     }
     static func portable(_ payload: PortableBackup, password: String) throws -> Data {
         try require(password.count >= 12, "Usa una password di almeno 12 caratteri per il backup.")
+        var payload = payload
+        payload.version = 2
+        payload.fileHashes = payload.files.mapValues { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() }
         let salt = try random(16); let key = try passwordKey(password, salt: salt)
         return Data("DLBACK02".utf8) + salt + (try seal(JSONEncoder().encode(payload), key: key))
     }
     static func restore(_ data: Data, password: String) throws -> PortableBackup {
-        try require(data.count > 52 && data.prefix(8) == Data("DLBACK02".utf8), "Formato backup non riconosciuto.")
+        try require(data.count > 52 && data.count <= 750 * 1024 * 1024 && data.prefix(8) == Data("DLBACK02".utf8), "Formato o dimensione backup non riconosciuti.")
         try require(!password.isEmpty, "Inserisci la password del backup.")
         let salt = data.subdata(in: 8..<24); let key = try passwordKey(password, salt: salt)
         let payload = try JSONDecoder().decode(PortableBackup.self, from: open(Data(data.dropFirst(24)), key: key))
-        try require(payload.version == 1 && payload.database.version == 2, "Versione del backup non supportata.")
+        try require((1...2).contains(payload.version) && payload.database.version == 2, "Versione del backup non supportata.")
         let ids = payload.database.entries.map(\.id); try require(Set(ids).count == ids.count, "Il backup contiene schede duplicate.")
+        var total = 0
+        for (name, bytes) in payload.files {
+            try require(UUID(uuidString: name)?.uuidString == name, "Identificativo allegato non valido.")
+            total += bytes.count
+            try require(bytes.count <= 100 * 1024 * 1024 && total <= 500 * 1024 * 1024, "Limite allegati superato.")
+            if payload.version == 2 {
+                let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+                try require(payload.fileHashes?[name] == hash, "Impronta allegato non valida.")
+            }
+        }
+        if payload.version == 2 { try require(Set(payload.fileHashes?.keys.map { $0 } ?? []) == Set(payload.files.keys), "Manifesto allegati incompleto.") }
+        try require(payload.database.counters.values.allSatisfy { $0 >= 0 }, "Progressivi non validi.")
         for e in payload.database.entries { for f in e.files ?? [] { try require(payload.files[f.id.uuidString] != nil, "Allegato mancante nel backup: \(f.name)") } }
         return payload
     }
