@@ -23,7 +23,7 @@ public sealed class ConformityDialog : Window
     {
         this.archive=archive;this.entry=(JsonObject)entry.DeepClone();profile=(JsonObject)(entry["issued"]?["profile"]??archive.Database["profile"]!).DeepClone();readOnly=entry["issued"]!=null||entry["archived"]?.GetValue<bool>()==true;
         this.entry["device"]??=MainWindow.NewDevice(); savedSnapshot=Snapshot();
-        Title="Conformità · "+Conformity.Text(entry,"name");Width=960;Height=800;MinWidth=760;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        Title="Conformità · "+Conformity.Text(entry,"name");Width=Math.Min(960,SystemParameters.WorkArea.Width-40);Height=Math.Min(800,SystemParameters.WorkArea.Height-40);MinWidth=720;MinHeight=500;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         var root=new DockPanel{Margin=new Thickness(24)};Content=root;
         var heading=DesignSystem.Heading("Dichiarazione per dispositivo su misura");DockPanel.SetDock(heading,Dock.Top);root.Children.Add(heading);
         var footer=new StackPanel();DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);footer.Children.Add(issue);

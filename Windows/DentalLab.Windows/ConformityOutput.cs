@@ -70,5 +70,20 @@ public static class ConformityOutput
         }
         return doc;
     }
-    public static void Print(JsonObject entry,JsonObject db) { var dialog=new PrintDialog();if(dialog.ShowDialog()==true)dialog.PrintDocument(Printable(entry,db).DocumentPaginator,"DentalLab · "+Label(entry)); }
+    private sealed class FitPaginator(DocumentPaginator source, Size size) : DocumentPaginator
+    {
+        private Size target=size;
+        public override bool IsPageCountValid => source.IsPageCountValid;
+        public override int PageCount => source.PageCount;
+        public override Size PageSize { get=>target; set=>target=value; }
+        public override IDocumentPaginatorSource Source => source.Source;
+        public override DocumentPage GetPage(int number) {
+            var page=source.GetPage(number); if(page==DocumentPage.Missing)return page;
+            double ratio=Math.Min(target.Width/page.Size.Width,target.Height/page.Size.Height);
+            var bounds=new Rect(0,0,page.Size.Width*ratio,page.Size.Height*ratio);
+            var visual=new DrawingVisual(); using(var drawing=visual.RenderOpen())drawing.DrawRectangle(new VisualBrush(page.Visual){Stretch=Stretch.Fill},null,bounds);
+            return new DocumentPage(visual,target,new Rect(target),bounds);
+        }
+    }
+    public static void Print(JsonObject entry,JsonObject db) { var dialog=new PrintDialog();if(dialog.ShowDialog()==true)dialog.PrintDocument(new FitPaginator(Printable(entry,db).DocumentPaginator,new Size(dialog.PrintableAreaWidth,dialog.PrintableAreaHeight)),"DentalLab · "+Label(entry)); }
 }

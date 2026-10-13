@@ -10,6 +10,7 @@ text = '\n'.join(page.get_text() for page in doc)
 assert 'BOZZA' in text and '2M2' in text and 'Faccetta' in text
 assert 'àèìòù' in text and 'ULTIMA RIGA DI PROVA' in text
 for i, page in enumerate(doc):
+    assert "DENTALLAB" in page.get_text() and "BOZZA" in page.get_text(), "Page header missing"
     for x0,y0,x1,y1,*_ in page.get_text('blocks'):
         assert x0 >= 0 and y0 >= 0 and x1 <= page.rect.width+1 and y1 <= page.rect.height+1, 'Text outside page'
     page.get_pixmap(matrix=pymupdf.Matrix(1.2,1.2)).save(path.with_name(f'conformita-pagina-{i+1}.png'))

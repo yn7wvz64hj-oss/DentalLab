@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>DentalLab</AssemblyName></PropertyGroup>
-  <PropertyGroup><ApplicationIcon>../../Resources/DentalLab.ico</ApplicationIcon><Version>0.7.0</Version></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../DentalLab.Core/DentalLab.Core.csproj" /><Resource Include="../../Resources/DentalLab.ico" Link="DentalLab.ico" /><PackageReference Include="PDFsharp-WPF" Version="6.2.4" /></ItemGroup>
+  <PropertyGroup><ApplicationIcon>../../Resources/DentalLab.ico</ApplicationIcon><Version>0.7.1</Version></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../DentalLab.Core/DentalLab.Core.csproj" /><Content Include="../../Resources/PDFsharp-LICENSE.txt" Link="PDFsharp-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /><Resource Include="../../Resources/DentalLab.ico" Link="DentalLab.ico" /><PackageReference Include="PDFsharp-WPF" Version="6.2.4" /></ItemGroup>
 </Project>

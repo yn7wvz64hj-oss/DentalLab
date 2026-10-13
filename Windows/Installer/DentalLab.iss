@@ -7,7 +7,7 @@
 [Setup]
 AppId={{D4D04389-A32D-48D2-94E3-402440FC9731}
 AppName=DentalLab
-AppVersion=0.7.0
+AppVersion=0.7.1
 AppPublisher=DentalLab
 DefaultDirName={localappdata}\Programs\DentalLab
 DefaultGroupName=DentalLab
